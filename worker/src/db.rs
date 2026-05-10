@@ -391,6 +391,43 @@ impl Database {
         Ok(())
     }
 
+    /// Remove track from chapter
+    pub fn remove_track_from_chapter(
+        &self,
+        chapter_id: i64,
+        track_id: i64,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "DELETE FROM chapter_tracks WHERE chapter_id = ?1 AND track_id = ?2",
+            params![chapter_id, track_id],
+        )?;
+        Ok(())
+    }
+
+    /// Delete a chapter and all its track associations
+    pub fn delete_chapter(&self, chapter_id: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "DELETE FROM chapter_tracks WHERE chapter_id = ?1",
+            params![chapter_id],
+        )?;
+        self.conn.execute(
+            "DELETE FROM chapters WHERE id = ?1",
+            params![chapter_id],
+        )?;
+        Ok(())
+    }
+
+    /// Get ordered track IDs in a chapter
+    pub fn get_chapter_tracks(&self, chapter_id: i64) -> Result<Vec<i64>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT track_id FROM chapter_tracks WHERE chapter_id = ?1 ORDER BY position"
+        )?;
+        let ids = stmt.query_map(params![chapter_id], |row| {
+            row.get::<_, i64>(0)
+        })?;
+        ids.collect()
+    }
+
     /// Export chapters to Rekordbox XML format
     pub fn export_rekordbox_xml(
         &self,

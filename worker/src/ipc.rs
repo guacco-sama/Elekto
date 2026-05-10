@@ -61,6 +61,25 @@ pub enum Command {
         position: i32,
     },
 
+    /// Remove track from chapter
+    RemoveTrackFromChapter {
+        id: String,
+        chapter_id: i64,
+        track_id: i64,
+    },
+
+    /// Delete a chapter
+    DeleteChapter {
+        id: String,
+        chapter_id: i64,
+    },
+
+    /// Get tracks in a chapter
+    GetChapterTracks {
+        id: String,
+        chapter_id: i64,
+    },
+
     /// Export chapters to Rekordbox XML
     ExportRekordbox {
         id: String,
@@ -197,6 +216,13 @@ pub enum Response {
         waveform_json: String,
         beatgrid_json: String,
         cues_json: String,
+    },
+
+    /// Chapter tracks response
+    ChapterTracks {
+        id: String,
+        chapter_id: i64,
+        track_ids: Vec<i64>,
     },
 
     /// Error response

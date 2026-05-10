@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Library, ScatterChart, GitGraph, Settings, Music, Search, Wand2, Sparkles } from 'lucide-react'
+import { Library, ScatterChart, GitGraph, Settings, Music, Search, Wand2, Sparkles, Layers } from 'lucide-react'
 import { useTrackStore } from './stores/trackStore'
 import { useWorker } from './hooks/useWorker'
 import TrackList from './components/TrackList'
@@ -7,10 +7,11 @@ import ScanProgress from './components/ScanProgress'
 import ScatterMap from './components/ScatterMap'
 import GraphPlaylist from './components/GraphPlaylist'
 import WaveformPlayer from './components/WaveformPlayer'
+import ChapterManager from './components/ChapterManager'
 import type { Track } from './stores/trackStore'
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'library' | 'scatter' | 'graph' | 'settings'>('library')
+  const [activeTab, setActiveTab] = useState<'library' | 'scatter' | 'graph' | 'chapters' | 'settings'>('library')
   const [dropping, setDropping] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -173,6 +174,12 @@ function App() {
             active={activeTab === 'graph'}
             onClick={() => setActiveTab('graph')}
           />
+          <NavButton
+            icon={<Layers className="w-5 h-5" />}
+            label="Chapters"
+            active={activeTab === 'chapters'}
+            onClick={() => setActiveTab('chapters')}
+          />
           <div className="flex-1" />
           <NavButton
             icon={<Settings className="w-5 h-5" />}
@@ -276,6 +283,12 @@ function App() {
 
           {activeTab === 'scatter' && <ScatterMap />}
           {activeTab === 'graph' && <GraphPlaylist />}
+          {activeTab === 'chapters' && (
+            <div className="h-full">
+              <h1 className="text-2xl font-bold text-dj-50 mb-4">Chapter Manager</h1>
+              <ChapterManager sendCommandAsync={sendCommandAsync as any} />
+            </div>
+          )}
           {activeTab === 'settings' && <SettingsView sendCommandAsync={sendCommandAsync} />}
         </main>
       </div>

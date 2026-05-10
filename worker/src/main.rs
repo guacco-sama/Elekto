@@ -181,6 +181,40 @@ async fn handle_command(cmd: Command, db: &db::Database) -> Response {
             }
         }
 
+        Command::RemoveTrackFromChapter { id, chapter_id, track_id } => {
+            match db.remove_track_from_chapter(chapter_id, track_id) {
+                Ok(_) => Response::Success { id },
+                Err(e) => Response::Error {
+                    id: Some(id),
+                    message: format!("Failed to remove track from chapter: {}", e),
+                },
+            }
+        }
+
+        Command::DeleteChapter { id, chapter_id } => {
+            match db.delete_chapter(chapter_id) {
+                Ok(_) => Response::Success { id },
+                Err(e) => Response::Error {
+                    id: Some(id),
+                    message: format!("Failed to delete chapter: {}", e),
+                },
+            }
+        }
+
+        Command::GetChapterTracks { id, chapter_id } => {
+            match db.get_chapter_tracks(chapter_id) {
+                Ok(track_ids) => Response::ChapterTracks {
+                    id,
+                    chapter_id,
+                    track_ids,
+                },
+                Err(e) => Response::Error {
+                    id: Some(id),
+                    message: format!("Failed to get chapter tracks: {}", e),
+                },
+            }
+        }
+
         Command::ExportRekordbox { id, chapter_ids, output_path } => {
             match db.export_rekordbox_xml(&chapter_ids, &output_path) {
                 Ok(_) => Response::ExportComplete {
