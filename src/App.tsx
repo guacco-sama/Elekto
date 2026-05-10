@@ -262,7 +262,7 @@ function App() {
 
           {activeTab === 'scatter' && <ScatterMap />}
           {activeTab === 'graph' && <GraphPlaylist />}
-          {activeTab === 'settings' && <SettingsView />}
+          {activeTab === 'settings' && <SettingsView sendCommandAsync={sendCommandAsync} />}
         </main>
       </div>
     </div>
@@ -321,12 +321,59 @@ function GraphPlaylistView() {
   )
 }
 
-function SettingsView() {
+function SettingsView({ sendCommandAsync }: { sendCommandAsync: ReturnType<typeof useWorker>['sendCommandAsync'] }) {
+  const [exportStatus, setExportStatus] = useState<string | null>(null)
+
+  const handleExport = async () => {
+    try {
+      setExportStatus('Exporting...')
+      const response = await sendCommandAsync<{
+        type: string
+        path: string
+      }>({
+        type: 'export_rekordbox',
+        chapter_ids: [],
+        output_path: '/tmp/djcuration_export.xml',
+      })
+      if (response.type === 'export_complete') {
+        setExportStatus(`Exported to ${response.path}`)
+      } else {
+        setExportStatus('Export failed')
+      }
+    } catch {
+      setExportStatus('Export failed')
+    }
+    setTimeout(() => setExportStatus(null), 5000)
+  }
+
   return (
     <div className="max-w-2xl">
       <h1 className="text-2xl font-bold text-dj-50 mb-6">Settings</h1>
-      
+
       <div className="space-y-4">
+        <div className="bg-dj-900 rounded-xl border border-dj-800 p-4">
+          <h3 className="font-medium text-dj-200 mb-3">Export</h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-dj-200">Rekordbox XML</p>
+                <p className="text-xs text-dj-500">Export your library to Rekordbox format</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {exportStatus && (
+                  <span className="text-xs text-dj-400">{exportStatus}</span>
+                )}
+                <button
+                  onClick={handleExport}
+                  className="px-3 py-1.5 bg-dj-accent hover:bg-dj-accent-hover text-white text-sm rounded-lg transition-colors"
+                >
+                  Export
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-dj-900 rounded-xl border border-dj-800 p-4">
           <h3 className="font-medium text-dj-200 mb-3">Library</h3>
           <div className="space-y-3">
@@ -365,12 +412,10 @@ function SettingsView() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-dj-200">LLM Model</p>
-                <p className="text-xs text-dj-500">Qwen3.5-0.8B for natural language search</p>
+                <p className="text-sm text-dj-200">Auto-Tagger</p>
+                <p className="text-xs text-dj-500">Rule-based classification (no download required)</p>
               </div>
-              <button className="px-3 py-1.5 bg-dj-accent hover:bg-dj-accent-hover text-white text-sm rounded-lg transition-colors">
-                Download
-              </button>
+              <span className="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded">Ready</span>
             </div>
           </div>
         </div>
