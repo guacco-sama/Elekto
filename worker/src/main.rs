@@ -1,12 +1,13 @@
 use std::io::{self, BufRead, Write};
 
+mod audio;
 mod db;
 mod ipc;
 mod models;
 mod scanner;
 
 use ipc::{Command, Response};
-use tracing::{info, error};
+use tracing::{info, error, warn};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -223,10 +224,83 @@ async fn handle_command(cmd: Command, db: &db::Database) -> Response {
         }
 
         Command::AnalyzeTrack { id, track_id } => {
-            // TODO: Implement audio analysis pipeline
-            Response::Error {
-                id: Some(id),
-                message: "Track analysis not yet implemented".to_string(),
+            info!("Analyzing track {}", track_id);
+
+            // Get track file path from database
+            let track = match db.get_track(track_id) {
+                Ok(Some(t)) => t,
+                Ok(None) => {
+                    return Response::Error {
+                        id: Some(id),
+                        message: format!("Track {} not found", track_id),
+                    };
+                }
+                Err(e) => {
+                    return Response::Error {
+                        id: Some(id),
+                        message: format!("Failed to get track: {}", e),
+                    };
+                }
+            };
+
+            // Decode audio
+            let (samples, sample_rate) = match audio::decode_audio(&track.file_path) {
+                Ok(result) => result,
+                Err(e) => {
+                    return Response::Error {
+                        id: Some(id),
+                        message: format!("Audio decode failed: {}", e),
+                    };
+                }
+            };
+
+            info!("Decoded {} samples at {} Hz, running analysis...", samples.len(), sample_rate);
+
+            // Run analysis
+            let analysis = match audio::analyze(&samples, sample_rate) {
+                Ok(a) => a,
+                Err(e) => {
+                    return Response::Error {
+                        id: Some(id),
+                        message: format!("Analysis failed: {}", e),
+                    };
+                }
+            };
+
+            info!("Analysis complete: BPM={}, Key={}, Energy={}", analysis.bpm, analysis.key, analysis.energy);
+
+            // Update track with analysis results
+            let updates = models::TrackUpdate {
+                title: None,
+                artist: None,
+                album: None,
+                bpm: Some(analysis.bpm),
+                key: Some(analysis.key.clone()),
+                camelot_key: Some(analysis.camelot_key.clone()),
+                energy: Some(analysis.energy),
+                danceability: Some(analysis.danceability),
+                emotion: Some(analysis.emotion.clone()),
+                genre: None,
+                sub_genre: None,
+                tags: None,
+            };
+
+            if let Err(e) = db.update_track(track_id, &updates) {
+                return Response::Error {
+                    id: Some(id),
+                    message: format!("Failed to update track: {}", e),
+                };
+            }
+
+            // Store feature vector
+            if let Err(e) = db.insert_features(track_id, &analysis.features) {
+                warn!("Failed to store features: {}", e);
+            }
+
+            Response::AnalysisComplete {
+                id,
+                track_id,
+                tags: updates,
             }
         }
     }

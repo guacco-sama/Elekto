@@ -37,6 +37,7 @@ interface TrackState {
   setScanProgress: (progress: number) => void
   setSelectedTrack: (id: number | null) => void
   setSearchQuery: (query: string) => void
+  updateTrack: (id: number, updates: Partial<Track>) => void
   clearTracks: () => void
 }
 
@@ -61,5 +62,8 @@ export const useTrackStore = create<TrackState>((set) => ({
   setScanProgress: (progress) => set({ scanProgress: progress }),
   setSelectedTrack: (id) => set({ selectedTrackId: id }),
   setSearchQuery: (query) => set({ searchQuery: query }),
+  updateTrack: (id: number, updates: Partial<Track>) => set((state) => ({
+    tracks: state.tracks.map((t) => t.id === id ? { ...t, ...updates } : t),
+  })),
   clearTracks: () => set({ tracks: [], totalTracks: 0, scanProgress: 0 }),
 }))

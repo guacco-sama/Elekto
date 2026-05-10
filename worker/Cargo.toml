@@ -20,9 +20,12 @@ rusqlite = { version = "0.32", features = ["bundled", "chrono", "serde_json"] }
 # Audio metadata
 lofty = "0.22"
 
-# Audio decoding and feature extraction
-# ffmpeg-next = "7.0"  # Enable when needed
-# rustfft = "6.2"      # Enable when needed
+# Audio decoding and feature extraction (pure Rust, no FFmpeg needed)
+symphonia = { version = "0.5", features = ["mp3", "flac", "wav", "aac", "isomp4"] }
+rustfft = "6.2"
+
+# Signal processing
+realfft = "3.4"
 
 # ONNX Runtime for ML inference
 # ort = "2.0"          # Enable when needed

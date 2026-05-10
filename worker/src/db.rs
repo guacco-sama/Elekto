@@ -499,4 +499,53 @@ impl Database {
             |row| row.get(0),
         ).optional()
     }
+
+    /// Get a single track by ID
+    pub fn get_track(&self, track_id: i64) -> Result<Option<crate::models::Track>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, file_path, title, artist, album, bpm, key, camelot_key,
+                energy, danceability, emotion, genre, sub_genre, duration_ms,
+                sample_rate, bitrate, file_size_bytes, cover_art_path, analyzed_at, created_at
+            FROM tracks WHERE id = ?1"
+        )?;
+
+        let track = stmt.query_row(params![track_id], |row| {
+            Ok(crate::models::Track {
+                id: row.get(0)?,
+                file_path: row.get(1)?,
+                title: row.get(2)?,
+                artist: row.get(3)?,
+                album: row.get(4)?,
+                bpm: row.get(5)?,
+                key: row.get(6)?,
+                camelot_key: row.get(7)?,
+                energy: row.get(8)?,
+                danceability: row.get(9)?,
+                emotion: row.get(10)?,
+                genre: row.get(11)?,
+                sub_genre: row.get(12)?,
+                duration_ms: row.get(13)?,
+                sample_rate: row.get(14)?,
+                bitrate: row.get(15)?,
+                file_size_bytes: row.get(16)?,
+                cover_art_path: row.get(17)?,
+                analyzed_at: row.get(18)?,
+                created_at: row.get(19)?,
+            })
+        }).optional()?;
+
+        Ok(track)
+    }
+
+    /// Insert feature vector for a track
+    pub fn insert_features(&self, track_id: i64, features: &[f32]) -> Result<(), rusqlite::Error> {
+        let features_json = serde_json::to_string(features).unwrap_or_else(|_| "[]".to_string());
+        self.conn.execute(
+            "INSERT INTO track_features (track_id, embedding)
+            VALUES (?1, ?2)
+            ON CONFLICT(track_id) DO UPDATE SET embedding = excluded.embedding",
+            params![track_id, features_json],
+        )?;
+        Ok(())
+    }
 }
