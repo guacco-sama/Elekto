@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useChapterStore } from '../stores/chapterStore'
 import { useTrackStore } from '../stores/trackStore'
-import { FolderPlus, Trash2, GripVertical, Music, ArrowRight, Sparkles, Zap, BarChart3 } from 'lucide-react'
+import { FolderPlus, Trash2, GripVertical, Music, ArrowRight, Sparkles } from 'lucide-react'
+import EnergyCurve from './EnergyCurve'
 
 interface ChapterManagerProps {
   sendCommandAsync: (cmd: Record<string, unknown>) => Promise<Record<string, unknown>>
@@ -275,6 +276,25 @@ export default function ChapterManager({ sendCommandAsync }: ChapterManagerProps
                 )}
               </div>
             </div>
+
+            {/* Energy Curve */}
+            {chapterTrackIds.length >= 2 && (
+              <div className="bg-dj-900 rounded-xl border border-dj-800 p-3">
+                <EnergyCurve
+                  tracks={chapterTrackIds.map(id => {
+                    const t = tracks.find(tr => tr.id === id)
+                    return {
+                      id,
+                      title: t?.title || null,
+                      energy: t?.energy ?? null,
+                      bpm: t?.bpm ?? null,
+                      camelot_key: t?.camelot_key || t?.key || null,
+                    }
+                  })}
+                  height={80}
+                />
+              </div>
+            )}
 
             <div className="flex-1 bg-dj-900 rounded-xl border border-dj-800 overflow-auto">
               {chapterTrackIds.length === 0 ? (
