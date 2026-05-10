@@ -5,6 +5,10 @@ export interface WorkerAPI {
   onResponse: (callback: (response: unknown) => void) => () => void
 }
 
+export interface AudioAPI {
+  readAudioFile: (filePath: string) => Promise<ArrayBuffer>
+}
+
 const workerAPI: WorkerAPI = {
   sendCommand: (command: unknown) => {
     ipcRenderer.send('worker-command', command)
@@ -16,15 +20,14 @@ const workerAPI: WorkerAPI = {
   },
 }
 
+const audioAPI: AudioAPI = {
+  readAudioFile: (filePath: string) =>
+    ipcRenderer.invoke('read-audio-file', filePath),
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   worker: workerAPI,
+  audio: audioAPI,
 })
 
-// Type declarations for renderer
-declare global {
-  interface Window {
-    electronAPI: {
-      worker: WorkerAPI
-    }
-  }
-}
+

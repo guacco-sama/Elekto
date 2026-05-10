@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { spawn } from 'child_process'
 import { join } from 'path'
+import { readFile } from 'fs/promises'
 
 let mainWindow: BrowserWindow | null
 let workerProcess: ReturnType<typeof spawn> | null
@@ -81,6 +82,11 @@ ipcMain.on('worker-command', (_, command: unknown) => {
   if (workerProcess?.stdin?.writable) {
     workerProcess.stdin.write(JSON.stringify(command) + '\n')
   }
+})
+
+ipcMain.handle('read-audio-file', async (_, filePath: string) => {
+  const buffer = await readFile(filePath)
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
 })
 
 app.whenReady().then(() => {

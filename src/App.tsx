@@ -242,16 +242,20 @@ function App() {
               <ScanProgress />
 
               {/* Waveform preview for selected track */}
-              {selectedTrackId && (
-                <div className="bg-dj-900 rounded-xl border border-dj-800 p-4">
-                  <WaveformPlayer
-                    trackId={selectedTrackId}
-                    trackTitle={tracks.find((t) => t.id === selectedTrackId)?.title || 'Unknown'}
-                    trackArtist={tracks.find((t) => t.id === selectedTrackId)?.artist || 'Unknown'}
-                    sendCommandAsync={sendCommandAsync as any}
-                  />
-                </div>
-              )}
+              {selectedTrackId && (() => {
+                const selectedTrack = tracks.find((t) => t.id === selectedTrackId)
+                return (
+                  <div className="bg-dj-900 rounded-xl border border-dj-800 p-4">
+                    <WaveformPlayer
+                      trackId={selectedTrackId}
+                      trackTitle={selectedTrack?.title || 'Unknown'}
+                      trackArtist={selectedTrack?.artist || 'Unknown'}
+                      filePath={selectedTrack?.file_path || ''}
+                      sendCommandAsync={sendCommandAsync as any}
+                    />
+                  </div>
+                )
+              })()}
 
               {tracks.length === 0 && (
                 <div

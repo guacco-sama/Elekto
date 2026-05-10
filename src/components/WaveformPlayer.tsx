@@ -1,4 +1,5 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
+import { AudioEngine } from '../audio/AudioEngine'
 
 interface WaveformData {
   peaks: number[]
@@ -26,6 +27,7 @@ interface WaveformPlayerProps {
   trackId: number
   trackTitle: string
   trackArtist: string
+  filePath: string
   sendCommandAsync: (cmd: Record<string, unknown>) => Promise<Record<string, unknown>>
 }
 
@@ -33,6 +35,7 @@ export default function WaveformPlayer({
   trackId,
   trackTitle,
   trackArtist,
+  filePath,
   sendCommandAsync,
 }: WaveformPlayerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -40,15 +43,45 @@ export default function WaveformPlayer({
   const [waveform, setWaveform] = useState<WaveformData | null>(null)
   const [beatGrid, setBeatGrid] = useState<BeatGrid | null>(null)
   const [cues, setCues] = useState<CuePoint[]>([])
-  const [loading, setLoading] = useState(true)
-  const [playhead, setPlayhead] = useState(0)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const animRef = useRef<number>(0)
+  const [loadingWaveform, setLoadingWaveform] = useState(true)
+  const [audioState, setAudioState] = useState<'idle' | 'loading' | 'playing' | 'paused'>('idle')
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [volume, setVolume] = useState(0.8)
+  const playheadRef = useRef(0)
 
-  // Fetch waveform + beat-grid
+  const audioRef = useRef<AudioEngine | null>(null)
+
+  // Initialize AudioEngine once
+  useEffect(() => {
+    const engine = new AudioEngine({
+      onTimeUpdate: (time, dur) => {
+        playheadRef.current = dur > 0 ? time / dur : 0
+        setCurrentTime(time)
+        setDuration(dur)
+      },
+      onEnded: () => {
+        setAudioState('idle')
+        playheadRef.current = 0
+        setCurrentTime(0)
+      },
+      onError: (err) => {
+        console.error('Audio error:', err)
+        setAudioState('idle')
+      },
+      onStateChange: (state) => setAudioState(state),
+    })
+    audioRef.current = engine
+    return () => {
+      engine.dispose()
+      audioRef.current = null
+    }
+  }, [])
+
+  // Fetch waveform + beat-grid from worker
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    setLoadingWaveform(true)
 
     const fetch = async () => {
       try {
@@ -66,12 +99,13 @@ export default function WaveformPlayer({
             setWaveform(wf)
             setBeatGrid(bg)
             setCues(cuePoints)
-            setLoading(false)
+            setDuration(wf.duration_sec)
           }
         }
       } catch (err) {
         console.error('Failed to load waveform:', err)
-        if (!cancelled) setLoading(false)
+      } finally {
+        if (!cancelled) setLoadingWaveform(false)
       }
     }
 
@@ -79,7 +113,27 @@ export default function WaveformPlayer({
     return () => { cancelled = true }
   }, [trackId, sendCommandAsync])
 
-  // Draw waveform
+  // Load audio file when track changes
+  useEffect(() => {
+    const engine = audioRef.current
+    if (!engine || !filePath) return
+
+    engine.loadFile(filePath).then(() => {
+      const dur = engine.getDuration()
+      if (dur > 0) {
+        setDuration(dur)
+      }
+    })
+  }, [filePath])
+
+  // Sync playhead to visual state for drawing
+  const [playhead, setPlayhead] = useState(0)
+  useEffect(() => {
+    if (!waveform || duration <= 0) return
+    setPlayhead(currentTime / duration)
+  }, [currentTime, duration, waveform])
+
+  // Draw waveform with animation loop
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     const container = containerRef.current
@@ -126,13 +180,18 @@ export default function WaveformPlayer({
       ctx.fillRect(x, halfH, barWidth - padding, barH)
     }
 
+    // Darken played portion
+    const phX = playhead * w
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'
+    ctx.fillRect(phX, 0, w - phX, h)
+
     // Draw beat markers
     if (beatGrid && beatGrid.beat_times.length > 0) {
-      const duration = waveform.duration_sec
+      const dur = waveform.duration_sec
       ctx.lineWidth = 1
 
       beatGrid.beat_times.forEach((time, idx) => {
-        const x = (time / duration) * w
+        const x = (time / dur) * w
         const isDownbeat = beatGrid.downbeat_indices.includes(idx)
 
         if (isDownbeat) {
@@ -180,7 +239,6 @@ export default function WaveformPlayer({
     })
 
     // Draw playhead
-    const phX = playhead * w
     ctx.strokeStyle = '#e8e8f8'
     ctx.lineWidth = 2
     ctx.beginPath()
@@ -188,51 +246,68 @@ export default function WaveformPlayer({
     ctx.lineTo(phX, h)
     ctx.stroke()
 
-    // Time display
+    // Time display near playhead
     ctx.fillStyle = '#e8e8f8'
     ctx.font = '11px JetBrains Mono, monospace'
-    const time = (playhead * waveform.duration_sec).toFixed(1)
-    ctx.fillText(`${time}s`, phX + 6, 16)
-  }, [waveform, beatGrid, cues, playhead])
+    const time = formatTime(currentTime)
+    const durText = formatTime(duration)
+    ctx.fillText(`${time} / ${durText}`, phX + 6, 16)
+  }, [waveform, beatGrid, cues, playhead, currentTime, duration])
 
+  // Animation frame for smooth waveform redraw
   useEffect(() => {
-    draw()
+    let animId = 0
+    const loop = () => {
+      draw()
+      animId = requestAnimationFrame(loop)
+    }
+    animId = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(animId)
   }, [draw])
 
-  // Playback simulation
-  useEffect(() => {
-    if (!isPlaying || !waveform) return
-
-    let last = performance.now()
-    const duration = waveform.duration_sec
-
-    const tick = (now: number) => {
-      const dt = (now - last) / 1000
-      last = now
-      setPlayhead((p) => {
-        const next = p + dt / duration
-        return next >= 1 ? 0 : next
-      })
-      animRef.current = requestAnimationFrame(tick)
-    }
-
-    animRef.current = requestAnimationFrame(tick)
-    return () => {
-      if (animRef.current) cancelAnimationFrame(animRef.current)
-    }
-  }, [isPlaying, waveform])
-
   // Click to seek
-  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || !waveform) return
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
-    const pct = x / rect.width
-    setPlayhead(Math.max(0, Math.min(1, pct)))
+    const pct = Math.max(0, Math.min(1, x / rect.width))
+    const time = pct * waveform.duration_sec
+    audioRef.current?.seek(time)
+  }, [waveform])
+
+  // Toggle play/pause
+  const togglePlay = useCallback(() => {
+    const engine = audioRef.current
+    if (!engine) return
+
+    if (engine.playing) {
+      engine.pause()
+    } else {
+      engine.play()
+    }
+  }, [])
+
+  // Stop
+  const handleStop = useCallback(() => {
+    audioRef.current?.stop()
+  }, [])
+
+  // Volume change
+  const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const vol = parseFloat(e.target.value)
+    setVolume(vol)
+    audioRef.current?.setVolume(vol)
+  }, [])
+
+  const formatTime = (sec: number): string => {
+    const m = Math.floor(sec / 60)
+    const s = Math.floor(sec % 60)
+    const ms = Math.floor((sec % 1) * 10)
+    return `${m}:${s.toString().padStart(2, '0')}.${ms}`
   }
 
-  if (loading) {
+  if (loadingWaveform) {
     return (
       <div className="h-32 flex items-center justify-center text-dj-500 text-sm">
         Generating waveform...
@@ -248,35 +323,63 @@ export default function WaveformPlayer({
     )
   }
 
+  const isReady = audioState !== 'loading'
+
   return (
     <div className="space-y-2">
-      {/* Track info */}
+      {/* Track info + controls */}
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-dj-100">{trackTitle || 'Unknown'}</p>
-          <p className="text-xs text-dj-500">{trackArtist || 'Unknown Artist'}</p>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-dj-100 truncate">{trackTitle || 'Unknown'}</p>
+          <p className="text-xs text-dj-500 truncate">{trackArtist || 'Unknown Artist'}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           {beatGrid && (
             <span className="text-xs text-dj-400 font-mono">
-              {beatGrid.bpm.toFixed(1)} BPM · {beatGrid.beat_times.length} beats
+              {beatGrid.bpm.toFixed(1)} BPM
             </span>
           )}
-          <button
-            onClick={() => setIsPlaying((p) => !p)}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-colors ${
-              isPlaying
-                ? 'bg-dj-accent text-white'
-                : 'bg-dj-800 text-dj-300 hover:bg-dj-700'
-            }`}
-          >
-            {isPlaying ? 'II' : '▶'}
-          </button>
+          {/* Volume */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-dj-500">Vol</span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volume}
+              onChange={handleVolumeChange}
+              className="w-20 h-1 bg-dj-700 rounded-lg appearance-none cursor-pointer accent-dj-accent"
+            />
+          </div>
+          {/* Play controls */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleStop}
+              disabled={!isReady}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-xs bg-dj-800 text-dj-400 hover:bg-dj-700 disabled:opacity-40 transition-colors"
+              title="Stop"
+            >
+              ◼
+            </button>
+            <button
+              onClick={togglePlay}
+              disabled={!isReady}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-colors ${
+                audioState === 'playing'
+                  ? 'bg-dj-accent text-white'
+                  : 'bg-dj-800 text-dj-300 hover:bg-dj-700 disabled:opacity-40'
+              }`}
+              title={audioState === 'playing' ? 'Pause' : 'Play'}
+            >
+              {audioState === 'loading' ? '○' : audioState === 'playing' ? '⏸' : '▶'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Waveform */}
-      <div ref={containerRef} className="w-full cursor-pointer">
+      {/* Waveform canvas */}
+      <div ref={containerRef} className="w-full cursor-pointer relative">
         <canvas
           ref={canvasRef}
           onClick={handleClick}
@@ -284,18 +387,27 @@ export default function WaveformPlayer({
         />
       </div>
 
-      {/* Beat info */}
-      {beatGrid && (
-        <div className="flex items-center gap-4 text-xs text-dj-500">
-          <span>Downbeats: {beatGrid.downbeat_indices.length}</span>
-          <span>Confidence: {Math.round(beatGrid.confidence * 100)}%</span>
-          <span>Phase: {beatGrid.phase_offset}</span>
+      {/* Bottom info bar */}
+      <div className="flex items-center justify-between text-xs text-dj-500">
+        <div className="flex items-center gap-4">
+          {beatGrid && (
+            <>
+              <span>Downbeats: {beatGrid.downbeat_indices.length}</span>
+              <span>Beats: {beatGrid.beat_times.length}</span>
+            </>
+          )}
         </div>
-      )}
+        <div className="flex items-center gap-4">
+          {cues.length > 0 && (
+            <span>{cues.length} cues detected</span>
+          )}
+          <span className="font-mono">{formatTime(currentTime)} / {formatTime(duration)}</span>
+        </div>
+      </div>
 
-      {/* Cue points list */}
+      {/* Cue badges */}
       {cues.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap pt-1">
           <span className="text-xs text-dj-500">Cues:</span>
           {cues.map((cue, i) => {
             const colors: Record<string, string> = {
@@ -308,12 +420,14 @@ export default function WaveformPlayer({
               energy_valley: 'bg-purple-400/20 text-purple-400',
             }
             return (
-              <span
+              <button
                 key={i}
-                className={`text-xs px-2 py-0.5 rounded ${colors[cue.cue_type] || 'bg-dj-800 text-dj-400'}`}
+                onClick={() => audioRef.current?.seek(cue.time_sec)}
+                className={`text-xs px-2 py-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity ${colors[cue.cue_type] || 'bg-dj-800 text-dj-400'}`}
+                title={`Jump to ${cue.cue_type}`}
               >
                 {cue.cue_type.replace('_', ' ')} @ {Math.round(cue.time_sec)}s
-              </span>
+              </button>
             )
           })}
         </div>

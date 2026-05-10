@@ -1,17 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-// Extend Window interface for Electron API
-declare global {
-  interface Window {
-    electronAPI: {
-      worker: {
-        sendCommand: (command: unknown) => void
-        onResponse: (callback: (response: unknown) => void) => () => void
-      }
-    }
-  }
-}
-
 interface WorkerCommand {
   id: string
   type: string
