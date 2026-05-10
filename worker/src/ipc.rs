@@ -87,6 +87,13 @@ pub enum Command {
         output_path: String,
     },
 
+    /// Export chapters to Engine Prime library
+    ExportEnginePrime {
+        id: String,
+        chapter_ids: Vec<i64>,
+        output_path: String,
+    },
+
     /// Get all settings
     GetSettings {
         id: String,

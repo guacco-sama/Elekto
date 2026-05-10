@@ -351,9 +351,9 @@ function GraphPlaylistView() {
 function SettingsView({ sendCommandAsync }: { sendCommandAsync: ReturnType<typeof useWorker>['sendCommandAsync'] }) {
   const [exportStatus, setExportStatus] = useState<string | null>(null)
 
-  const handleExport = async () => {
+  const handleExportRekordbox = async () => {
     try {
-      setExportStatus('Exporting...')
+      setExportStatus('Exporting to Rekordbox...')
       const response = await sendCommandAsync<{
         type: string
         path: string
@@ -363,7 +363,29 @@ function SettingsView({ sendCommandAsync }: { sendCommandAsync: ReturnType<typeo
         output_path: '/tmp/djcuration_export.xml',
       })
       if (response.type === 'export_complete') {
-        setExportStatus(`Exported to ${response.path}`)
+        setExportStatus(`Rekordbox XML exported to ${response.path}`)
+      } else {
+        setExportStatus('Export failed')
+      }
+    } catch {
+      setExportStatus('Export failed')
+    }
+    setTimeout(() => setExportStatus(null), 5000)
+  }
+
+  const handleExportEnginePrime = async () => {
+    try {
+      setExportStatus('Exporting to Engine Prime...')
+      const response = await sendCommandAsync<{
+        type: string
+        path: string
+      }>({
+        type: 'export_engine_prime',
+        chapter_ids: [],
+        output_path: '/tmp/djcuration_engine',
+      })
+      if (response.type === 'export_complete') {
+        setExportStatus(`Engine Prime library exported to ${response.path}`)
       } else {
         setExportStatus('Export failed')
       }
@@ -384,20 +406,34 @@ function SettingsView({ sendCommandAsync }: { sendCommandAsync: ReturnType<typeo
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-dj-200">Rekordbox XML</p>
-                <p className="text-xs text-dj-500">Export your library to Rekordbox format</p>
+                <p className="text-xs text-dj-500">Export to Pioneer Rekordbox (rekordbox.xml)</p>
               </div>
               <div className="flex items-center gap-3">
-                {exportStatus && (
-                  <span className="text-xs text-dj-400">{exportStatus}</span>
-                )}
                 <button
-                  onClick={handleExport}
+                  onClick={handleExportRekordbox}
                   className="px-3 py-1.5 bg-dj-accent hover:bg-dj-accent-hover text-white text-sm rounded-lg transition-colors"
                 >
-                  Export
+                  Export XML
                 </button>
               </div>
             </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-dj-200">Engine Prime</p>
+                <p className="text-xs text-dj-500">Export to Denon Engine DJ (m.db + p.db + crates)</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleExportEnginePrime}
+                  className="px-3 py-1.5 bg-dj-accent hover:bg-dj-accent-hover text-white text-sm rounded-lg transition-colors"
+                >
+                  Export DB
+                </button>
+              </div>
+            </div>
+            {exportStatus && (
+              <p className="text-xs text-dj-400 mt-2">{exportStatus}</p>
+            )}
           </div>
         </div>
 

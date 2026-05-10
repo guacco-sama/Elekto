@@ -2,6 +2,7 @@ use std::io::{self, BufRead, Write};
 
 mod audio;
 mod db;
+mod export;
 mod ipc;
 mod llm;
 mod models;
@@ -217,6 +218,19 @@ async fn handle_command(cmd: Command, db: &db::Database) -> Response {
 
         Command::ExportRekordbox { id, chapter_ids, output_path } => {
             match db.export_rekordbox_xml(&chapter_ids, &output_path) {
+                Ok(_) => Response::ExportComplete {
+                    id,
+                    path: output_path,
+                },
+                Err(e) => Response::Error {
+                    id: Some(id),
+                    message: format!("Export failed: {}", e),
+                },
+            }
+        }
+
+        Command::ExportEnginePrime { id, chapter_ids, output_path } => {
+            match export::export_engine_prime(&db, &chapter_ids, &output_path) {
                 Ok(_) => Response::ExportComplete {
                     id,
                     path: output_path,

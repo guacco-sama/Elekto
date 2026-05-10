@@ -1,12 +1,12 @@
 use rusqlite::{Connection, params, OptionalExtension};
-use tracing::{info, error};
+use tracing::info;
 use std::path::Path;
 
 use crate::models::{Track, Chapter, TrackUpdate};
 
 /// Database layer for DJ Curation - wraps SQLite with typed operations
 pub struct Database {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl Database {
