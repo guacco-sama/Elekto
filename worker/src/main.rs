@@ -7,6 +7,7 @@ mod ipc;
 mod llm;
 mod models;
 mod scanner;
+mod sort;
 mod waveform;
 
 use ipc::{Command, Response};
@@ -212,6 +213,26 @@ async fn handle_command(cmd: Command, db: &db::Database) -> Response {
                 Err(e) => Response::Error {
                     id: Some(id),
                     message: format!("Failed to get chapter tracks: {}", e),
+                },
+            }
+        }
+
+        Command::SortChapter { id, chapter_id, strategy } => {
+            match sort::sort_tracks(&db, chapter_id, &strategy) {
+                Ok(track_ids) => {
+                    // Update positions in database
+                    for (pos, track_id) in track_ids.iter().enumerate() {
+                        let _ = db.add_track_to_chapter(chapter_id, *track_id, pos as i32);
+                    }
+                    Response::ChapterSorted {
+                        id,
+                        chapter_id,
+                        track_ids,
+                    }
+                }
+                Err(e) => Response::Error {
+                    id: Some(id),
+                    message: format!("Sort failed: {}", e),
                 },
             }
         }

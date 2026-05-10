@@ -80,6 +80,13 @@ pub enum Command {
         chapter_id: i64,
     },
 
+    /// Auto-sort tracks in a chapter by energy flow / harmonic compatibility
+    SortChapter {
+        id: String,
+        chapter_id: i64,
+        strategy: String, // "energy_flow", "harmonic", "bpm_ramp", "random"
+    },
+
     /// Export chapters to Rekordbox XML
     ExportRekordbox {
         id: String,
@@ -227,6 +234,13 @@ pub enum Response {
 
     /// Chapter tracks response
     ChapterTracks {
+        id: String,
+        chapter_id: i64,
+        track_ids: Vec<i64>,
+    },
+
+    /// Chapter sorted (new order)
+    ChapterSorted {
         id: String,
         chapter_id: i64,
         track_ids: Vec<i64>,

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useChapterStore } from '../stores/chapterStore'
 import { useTrackStore } from '../stores/trackStore'
-import { FolderPlus, Trash2, GripVertical, Music, ArrowRight } from 'lucide-react'
+import { FolderPlus, Trash2, GripVertical, Music, ArrowRight, Sparkles, Zap, BarChart3 } from 'lucide-react'
 
 interface ChapterManagerProps {
   sendCommandAsync: (cmd: Record<string, unknown>) => Promise<Record<string, unknown>>
@@ -26,6 +26,8 @@ export default function ChapterManager({ sendCommandAsync }: ChapterManagerProps
   const [isCreating, setIsCreating] = useState(false)
   const [draggedTrack, setDraggedTrack] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const [sortStrategy, setSortStrategy] = useState<'energy_flow' | 'harmonic' | 'bpm_ramp' | 'random'>('energy_flow')
+  const [sorting, setSorting] = useState(false)
 
   // Load chapters on mount
   useEffect(() => {
@@ -106,6 +108,25 @@ export default function ChapterManager({ sendCommandAsync }: ChapterManagerProps
       removeTrackFromChapter(chapterId, trackId)
     }
   }, [removeTrackFromChapter, sendCommandAsync])
+
+  const handleMagicSort = useCallback(async (chapterId: number) => {
+    if (sorting) return
+    setSorting(true)
+    try {
+      const res = await sendCommandAsync({
+        type: 'sort_chapter',
+        chapter_id: chapterId,
+        strategy: sortStrategy,
+      }) as { type: string; chapter_id: number; track_ids: number[] }
+      if (res.type === 'chapter_sorted') {
+        setChapterTracks(chapterId, res.track_ids)
+      }
+    } catch (e) {
+      console.error('Magic sort failed:', e)
+    } finally {
+      setSorting(false)
+    }
+  }, [sortStrategy, sorting, sendCommandAsync, setChapterTracks])
 
   const handleDragStart = (trackId: number) => {
     setDraggedTrack(trackId)
@@ -227,6 +248,30 @@ export default function ChapterManager({ sendCommandAsync }: ChapterManagerProps
                     <ArrowRight className="w-4 h-4" />
                     Add Selected Track
                   </button>
+                )}
+                {/* Magic Sort */}
+                {chapterTrackIds.length >= 2 && (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={sortStrategy}
+                      onChange={(e) => setSortStrategy(e.target.value as any)}
+                      className="bg-dj-800 border border-dj-700 text-dj-200 text-xs rounded-lg px-2 py-1.5"
+                    >
+                      <option value="energy_flow">Energy Flow</option>
+                      <option value="harmonic">Harmonic</option>
+                      <option value="bpm_ramp">BPM Ramp</option>
+                      <option value="random">Random</option>
+                    </select>
+                    <button
+                      onClick={() => handleMagicSort(selectedChapter.id)}
+                      disabled={sorting}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-dj-800 hover:bg-dj-700 border border-dj-700 text-dj-200 text-sm rounded-lg transition-colors disabled:opacity-40"
+                      title="Auto-sort tracks"
+                    >
+                      <Sparkles className="w-4 h-4 text-yellow-400" />
+                      {sorting ? 'Sorting...' : 'Magic Sort'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
