@@ -4,6 +4,8 @@ import { useTrackStore } from './stores/trackStore'
 import { useWorker } from './hooks/useWorker'
 import TrackList from './components/TrackList'
 import ScanProgress from './components/ScanProgress'
+import ScatterMap from './components/ScatterMap'
+import GraphPlaylist from './components/GraphPlaylist'
 import type { Track } from './stores/trackStore'
 
 function App() {
@@ -258,8 +260,8 @@ function App() {
             </div>
           )}
 
-          {activeTab === 'scatter' && <ScatterMapView />}
-          {activeTab === 'graph' && <GraphPlaylistView />}
+          {activeTab === 'scatter' && <ScatterMap />}
+          {activeTab === 'graph' && <GraphPlaylist />}
           {activeTab === 'settings' && <SettingsView />}
         </main>
       </div>
