@@ -103,6 +103,13 @@ pub enum Command {
     ModelStatus {
         id: String,
     },
+
+    /// Get waveform + beat-grid data for a track
+    GetWaveform {
+        id: String,
+        track_id: i64,
+        pixel_width: Option<usize>,
+    },
 }
 
 /// Responses sent from Rust worker to Electron main process via stdout
@@ -181,6 +188,14 @@ pub enum Response {
         ready: bool,
         model_name: String,
         downloaded: bool,
+    },
+
+    /// Waveform + beat-grid data
+    WaveformData {
+        id: String,
+        track_id: i64,
+        waveform_json: String,
+        beatgrid_json: String,
     },
 
     /// Error response

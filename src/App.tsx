@@ -6,6 +6,7 @@ import TrackList from './components/TrackList'
 import ScanProgress from './components/ScanProgress'
 import ScatterMap from './components/ScatterMap'
 import GraphPlaylist from './components/GraphPlaylist'
+import WaveformPlayer from './components/WaveformPlayer'
 import type { Track } from './stores/trackStore'
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
   const setScanning = useTrackStore((s) => s.setScanning)
   const setScanProgress = useTrackStore((s) => s.setScanProgress)
   const tracks = useTrackStore((s) => s.tracks)
+  const selectedTrackId = useTrackStore((s) => s.selectedTrackId)
   const updateTrack = useTrackStore((s) => s.updateTrack)
 
   const handleAnalyzeAll = useCallback(async () => {
@@ -231,6 +233,18 @@ function App() {
               </div>
 
               <ScanProgress />
+
+              {/* Waveform preview for selected track */}
+              {selectedTrackId && (
+                <div className="bg-dj-900 rounded-xl border border-dj-800 p-4">
+                  <WaveformPlayer
+                    trackId={selectedTrackId}
+                    trackTitle={tracks.find((t) => t.id === selectedTrackId)?.title || 'Unknown'}
+                    trackArtist={tracks.find((t) => t.id === selectedTrackId)?.artist || 'Unknown'}
+                    sendCommandAsync={sendCommandAsync as any}
+                  />
+                </div>
+              )}
 
               {tracks.length === 0 && (
                 <div

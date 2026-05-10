@@ -6,6 +6,7 @@ mod ipc;
 mod llm;
 mod models;
 mod scanner;
+mod waveform;
 
 use ipc::{Command, Response};
 use tracing::{info, error, warn};
@@ -415,6 +416,54 @@ async fn handle_command(cmd: Command, db: &db::Database) -> Response {
                 ready: true,
                 model_name: "Rule-based AutoTagger (no download required)".to_string(),
                 downloaded: true,
+            }
+        }
+
+        Command::GetWaveform { id, track_id, pixel_width } => {
+            info!("Generating waveform for track {}", track_id);
+
+            let track = match db.get_track(track_id) {
+                Ok(Some(t)) => t,
+                Ok(None) => {
+                    return Response::Error {
+                        id: Some(id),
+                        message: format!("Track {} not found", track_id),
+                    };
+                }
+                Err(e) => {
+                    return Response::Error {
+                        id: Some(id),
+                        message: format!("Failed to get track: {}", e),
+                    };
+                }
+            };
+
+            // Decode audio
+            let (samples, sample_rate) = match audio::decode_audio(&track.file_path) {
+                Ok(result) => result,
+                Err(e) => {
+                    return Response::Error {
+                        id: Some(id),
+                        message: format!("Audio decode failed: {}", e),
+                    };
+                }
+            };
+
+            // Generate waveform
+            let width = pixel_width.unwrap_or(1200);
+            let wf = waveform::generate_waveform(&samples, sample_rate, width);
+            let wf_json = waveform::waveform_to_json(&wf);
+
+            // Generate beat-grid using existing BPM
+            let bpm = track.bpm.unwrap_or(128.0);
+            let grid = waveform::detect_beat_grid(&samples, sample_rate, bpm);
+            let grid_json = waveform::beatgrid_to_json(&grid);
+
+            Response::WaveformData {
+                id,
+                track_id,
+                waveform_json: wf_json,
+                beatgrid_json: grid_json,
             }
         }
     }
