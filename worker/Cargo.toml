@@ -1,0 +1,61 @@
+[package]
+name = "djcuration-worker"
+version = "0.1.0"
+edition = "2024"
+authors = ["DJ Curation Team"]
+description = "Native worker for DJ Curation - audio analysis, ML inference, database"
+license = "MIT"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.42", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled", "chrono", "serde_json"] }
+
+# Audio metadata
+lofty = "0.22"
+
+# Audio decoding and feature extraction
+# ffmpeg-next = "7.0"  # Enable when needed
+# rustfft = "6.2"      # Enable when needed
+
+# ONNX Runtime for ML inference
+# ort = "2.0"          # Enable when needed
+
+# llama.cpp for LLM inference
+# llama-cpp-2 = "0.1"  # Enable when needed
+
+# HTTP client for model downloads (rustls-tls = no OpenSSL dependency)
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+futures-util = "0.3"
+
+# File system and path handling
+walkdir = "2.5"
+dirs = "5.0"
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Utilities
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
+rayon = "1.10"
+
+[dev-dependencies]
+tempfile = "3.14"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

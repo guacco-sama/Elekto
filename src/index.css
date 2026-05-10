@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-dj-950 text-dj-100;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-dj-900 rounded;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-dj-600 rounded hover:bg-dj-500;
+  }
+  
+  ::selection {
+    @apply bg-dj-accent/30 text-dj-50;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

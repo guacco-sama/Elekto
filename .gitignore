@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+worker/target/
+
+# Build outputs
+dist/
+dist-electron/
+release/
+*.exe
+*.AppImage
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Testing
+coverage/
+
+# Temporary
+tmp/
+temp/
+*.tmp
