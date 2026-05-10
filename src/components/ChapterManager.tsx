@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useChapterStore } from '../stores/chapterStore'
 import { useTrackStore } from '../stores/trackStore'
-import { FolderPlus, Trash2, GripVertical, Music, ArrowRight, Sparkles, Wand2 } from 'lucide-react'
+import { FolderPlus, Trash2, GripVertical, Music, ArrowRight, Sparkles, Wand2, Download, Database } from 'lucide-react'
 import EnergyCurve from './EnergyCurve'
 
 interface ChapterManagerProps {
@@ -344,6 +344,48 @@ export default function ChapterManager({ sendCommandAsync }: ChapterManagerProps
                     >
                       <Sparkles className="w-4 h-4 text-yellow-400" />
                       {sorting ? 'Sorting...' : 'Magic Sort'}
+                    </button>
+                  </div>
+                )}
+                {/* Chapter Export */}
+                {chapterTrackIds.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        const result = await window.electronAPI.dialog.saveFile({
+                          title: `Export ${selectedChapter.name} to Rekordbox`,
+                          defaultPath: `${selectedChapter.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xml`,
+                          filters: [{ name: 'XML', extensions: ['xml'] }],
+                        })
+                        if (result.canceled || !result.filePath) return
+                        await sendCommandAsync({
+                          type: 'export_rekordbox',
+                          chapter_ids: [selectedChapter.id],
+                          output_path: result.filePath,
+                        })
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-dj-950 border border-dj-700 hover:border-dj-accent/50 hover:bg-dj-800/50 text-dj-400 hover:text-dj-200 text-xs rounded-lg transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Rekordbox
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const result = await window.electronAPI.dialog.selectDirectory({
+                          title: `Export ${selectedChapter.name} to Engine Prime`,
+                          buttonLabel: 'Export Here',
+                        })
+                        if (result.canceled || result.filePaths.length === 0) return
+                        await sendCommandAsync({
+                          type: 'export_engine_prime',
+                          chapter_ids: [selectedChapter.id],
+                          output_path: result.filePaths[0],
+                        })
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-dj-950 border border-dj-700 hover:border-dj-accent/50 hover:bg-dj-800/50 text-dj-400 hover:text-dj-200 text-xs rounded-lg transition-colors"
+                    >
+                      <Database className="w-3.5 h-3.5" />
+                      Engine Prime
                     </button>
                   </div>
                 )}

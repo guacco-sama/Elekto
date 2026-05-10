@@ -11,6 +11,8 @@ export interface AudioAPI {
 
 export interface DialogAPI {
   selectFolder: () => Promise<{ canceled: boolean; filePaths: string[] }>
+  saveFile: (opts: { title?: string; defaultPath?: string; filters?: Array<{ name: string; extensions: string[] }> }) => Promise<{ canceled: boolean; filePath: string }>
+  selectDirectory: (opts: { title?: string; defaultPath?: string; buttonLabel?: string }) => Promise<{ canceled: boolean; filePaths: string[] }>
 }
 
 const workerAPI: WorkerAPI = {
@@ -31,6 +33,8 @@ const audioAPI: AudioAPI = {
 
 const dialogAPI: DialogAPI = {
   selectFolder: () => ipcRenderer.invoke('select-folder'),
+  saveFile: (opts) => ipcRenderer.invoke('save-file', opts),
+  selectDirectory: (opts) => ipcRenderer.invoke('select-directory', opts),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {

@@ -94,6 +94,27 @@ ipcMain.handle('select-folder', async () => {
   return result
 })
 
+ipcMain.handle('save-file', async (_, opts: { title?: string; defaultPath?: string; filters?: Array<{ name: string; extensions: string[] }> }) => {
+  if (!mainWindow) return { canceled: true, filePath: '' }
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: opts.title || 'Save',
+    defaultPath: opts.defaultPath || '',
+    filters: opts.filters || [{ name: 'All Files', extensions: ['*'] }],
+  })
+  return result
+})
+
+ipcMain.handle('select-directory', async (_, opts: { title?: string; defaultPath?: string; buttonLabel?: string }) => {
+  if (!mainWindow) return { canceled: true, filePaths: [] }
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: opts.title || 'Select Directory',
+    defaultPath: opts.defaultPath || '',
+    buttonLabel: opts.buttonLabel || 'Select',
+  })
+  return result
+})
+
 ipcMain.handle('read-audio-file', async (_, filePath: string) => {
   const buffer = await readFile(filePath)
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)

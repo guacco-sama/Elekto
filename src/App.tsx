@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Library, ScatterChart, GitGraph, Settings, Music, Search, Wand2, Sparkles, Layers } from 'lucide-react'
 import { useTrackStore } from './stores/trackStore'
 import { useWorker } from './hooks/useWorker'
+import { useKeyboard } from './hooks/useKeyboard'
 import TrackList from './components/TrackList'
 import ScanProgress from './components/ScanProgress'
 import AnalysisProgressBar from './components/AnalysisProgress'
@@ -18,6 +19,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [nlMode, setNlMode] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const { isReady, sendCommandAsync, sendCommandWithProgress } = useWorker()
   const setTracks = useTrackStore((s) => s.setTracks)
@@ -26,6 +28,7 @@ function App() {
   const setScanProgress = useTrackStore((s) => s.setScanProgress)
   const tracks = useTrackStore((s) => s.tracks)
   const selectedTrackId = useTrackStore((s) => s.selectedTrackId)
+  const setSelectedTrack = useTrackStore((s) => s.setSelectedTrack)
   const updateTrack = useTrackStore((s) => s.updateTrack)
   const setAnalyzing = useTrackStore((s) => s.setAnalyzing)
   const setAnalyzeProgress = useTrackStore((s) => s.setAnalyzeProgress)
@@ -172,6 +175,22 @@ function App() {
     if (e.key === 'Enter') handleSearch()
   }
 
+  // Keyboard shortcuts
+  useKeyboard({
+    onPlayPause: () => {
+      // Find the waveform player's play toggle - simplified: focus selected track
+    },
+    onSearchFocus: () => {
+      searchRef.current?.focus()
+    },
+    onTabSwitch: (tab) => setActiveTab(tab as any),
+    onAnalyze: handleAnalyzeAll,
+    onEscape: () => {
+      setSelectedTrack(null)
+    },
+    enabled: !showOnboarding,
+  })
+
   // Check onboarding status when worker is ready
   useEffect(() => {
     if (!isReady) return
@@ -301,6 +320,7 @@ function App() {
                   <div className="relative">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-dj-500" />
                     <input
+                      ref={searchRef}
                       type="text"
                       placeholder={nlMode ? '"dark techno 130bpm"' : 'Search tracks...'}
                       value={searchQuery}
@@ -444,6 +464,13 @@ function SettingsView({ sendCommandAsync }: { sendCommandAsync: ReturnType<typeo
 
   const handleExportRekordbox = async () => {
     try {
+      const result = await window.electronAPI.dialog.saveFile({
+        title: 'Export Rekordbox XML',
+        defaultPath: 'rekordbox.xml',
+        filters: [{ name: 'XML', extensions: ['xml'] }],
+      })
+      if (result.canceled || !result.filePath) return
+
       setExportStatus('Exporting to Rekordbox...')
       const response = await sendCommandAsync<{
         type: string
@@ -451,7 +478,7 @@ function SettingsView({ sendCommandAsync }: { sendCommandAsync: ReturnType<typeo
       }>({
         type: 'export_rekordbox',
         chapter_ids: [],
-        output_path: '/tmp/elekto_export.xml',
+        output_path: result.filePath,
       })
       if (response.type === 'export_complete') {
         setExportStatus(`Rekordbox XML exported to ${response.path}`)
@@ -466,6 +493,12 @@ function SettingsView({ sendCommandAsync }: { sendCommandAsync: ReturnType<typeo
 
   const handleExportEnginePrime = async () => {
     try {
+      const result = await window.electronAPI.dialog.selectDirectory({
+        title: 'Export Engine Prime Library',
+        buttonLabel: 'Export Here',
+      })
+      if (result.canceled || result.filePaths.length === 0) return
+
       setExportStatus('Exporting to Engine Prime...')
       const response = await sendCommandAsync<{
         type: string
@@ -473,7 +506,7 @@ function SettingsView({ sendCommandAsync }: { sendCommandAsync: ReturnType<typeo
       }>({
         type: 'export_engine_prime',
         chapter_ids: [],
-        output_path: '/tmp/elekto_engine',
+        output_path: result.filePaths[0],
       })
       if (response.type === 'export_complete') {
         setExportStatus(`Engine Prime library exported to ${response.path}`)

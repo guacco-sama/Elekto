@@ -10,6 +10,8 @@ declare global {
 
   interface DialogAPI {
     selectFolder: () => Promise<{ canceled: boolean; filePaths: string[] }>
+    saveFile: (opts: { title?: string; defaultPath?: string; filters?: Array<{ name: string; extensions: string[] }> }) => Promise<{ canceled: boolean; filePath: string }>
+    selectDirectory: (opts: { title?: string; defaultPath?: string; buttonLabel?: string }) => Promise<{ canceled: boolean; filePaths: string[] }>
   }
 
   interface Window {
