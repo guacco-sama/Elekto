@@ -538,14 +538,45 @@ impl Database {
     }
 
     /// Insert feature vector for a track
-    pub fn insert_features(&self, track_id: i64, features: &[f32]) -> Result<(), rusqlite::Error> {
-        let features_json = serde_json::to_string(features).unwrap_or_else(|_| "[]".to_string());
+    pub fn insert_features(&self, track_id: i64, features: &crate::models::TrackFeatures) -> Result<(), rusqlite::Error> {
         self.conn.execute(
-            "INSERT INTO track_features (track_id, embedding)
-            VALUES (?1, ?2)
-            ON CONFLICT(track_id) DO UPDATE SET embedding = excluded.embedding",
-            params![track_id, features_json],
+            "INSERT INTO track_features (track_id, embedding, spectral_centroid, spectral_rolloff, zero_crossing_rate, rms_energy)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            ON CONFLICT(track_id) DO UPDATE SET
+                embedding = excluded.embedding,
+                spectral_centroid = excluded.spectral_centroid,
+                spectral_rolloff = excluded.spectral_rolloff,
+                zero_crossing_rate = excluded.zero_crossing_rate,
+                rms_energy = excluded.rms_energy",
+            params![
+                track_id,
+                features.embedding,
+                features.spectral_centroid,
+                features.spectral_rolloff,
+                features.zero_crossing_rate,
+                features.rms_energy,
+            ],
         )?;
         Ok(())
+    }
+
+    /// Get feature vector for a track
+    pub fn get_features(&self, track_id: i64) -> Result<Option<crate::models::TrackFeatures>, rusqlite::Error> {
+        let result = self.conn.query_row(
+            "SELECT track_id, embedding, spectral_centroid, spectral_rolloff, zero_crossing_rate, rms_energy
+            FROM track_features WHERE track_id = ?1",
+            params![track_id],
+            |row| {
+                Ok(crate::models::TrackFeatures {
+                    track_id: row.get(0)?,
+                    embedding: row.get(1)?,
+                    spectral_centroid: row.get(2)?,
+                    spectral_rolloff: row.get(3)?,
+                    zero_crossing_rate: row.get(4)?,
+                    rms_energy: row.get(5)?,
+                })
+            },
+        ).optional()?;
+        Ok(result)
     }
 }

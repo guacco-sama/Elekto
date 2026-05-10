@@ -87,10 +87,21 @@ pub enum Command {
         url: String,
     },
 
-    /// Analyze a single track (audio feature extraction + ML tagging)
+    /// Analyze a single track (audio feature extraction)
     AnalyzeTrack {
         id: String,
         track_id: i64,
+    },
+
+    /// Auto-tag a track using LLM (genre, sub-genre, mood refinement)
+    AutoTagTrack {
+        id: String,
+        track_id: i64,
+    },
+
+    /// Check if LLM model is downloaded and ready
+    ModelStatus {
+        id: String,
     },
 }
 
@@ -155,6 +166,21 @@ pub enum Response {
         id: String,
         track_id: i64,
         tags: TrackUpdate,
+    },
+
+    /// Auto-tagging complete
+    AutoTagComplete {
+        id: String,
+        track_id: i64,
+        tags: TrackUpdate,
+    },
+
+    /// Model status
+    ModelStatus {
+        id: String,
+        ready: bool,
+        model_name: String,
+        downloaded: bool,
     },
 
     /// Error response

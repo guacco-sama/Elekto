@@ -3,6 +3,7 @@ use std::io::{self, BufRead, Write};
 mod audio;
 mod db;
 mod ipc;
+mod llm;
 mod models;
 mod scanner;
 
@@ -293,7 +294,15 @@ async fn handle_command(cmd: Command, db: &db::Database) -> Response {
             }
 
             // Store feature vector
-            if let Err(e) = db.insert_features(track_id, &analysis.features) {
+            let features = models::TrackFeatures {
+                track_id,
+                embedding: serde_json::to_string(&analysis.features).unwrap_or_else(|_| "[]".to_string()),
+                spectral_centroid: Some(analysis.spectral_centroid),
+                spectral_rolloff: Some(analysis.spectral_rolloff),
+                zero_crossing_rate: Some(analysis.zero_crossing_rate),
+                rms_energy: Some(analysis.rms_energy),
+            };
+            if let Err(e) = db.insert_features(track_id, &features) {
                 warn!("Failed to store features: {}", e);
             }
 
@@ -301,6 +310,111 @@ async fn handle_command(cmd: Command, db: &db::Database) -> Response {
                 id,
                 track_id,
                 tags: updates,
+            }
+        }
+
+        Command::AutoTagTrack { id, track_id } => {
+            info!("Auto-tagging track {}", track_id);
+
+            // Get track + existing analysis from DB
+            let track = match db.get_track(track_id) {
+                Ok(Some(t)) => t,
+                Ok(None) => {
+                    return Response::Error {
+                        id: Some(id),
+                        message: format!("Track {} not found", track_id),
+                    };
+                }
+                Err(e) => {
+                    return Response::Error {
+                        id: Some(id),
+                        message: format!("Failed to get track: {}", e),
+                    };
+                }
+            };
+
+            // Get audio features
+            let features_row = match db.get_features(track_id) {
+                Ok(Some(f)) => f,
+                _ => {
+                    return Response::Error {
+                        id: Some(id),
+                        message: "Track not analyzed yet. Run AnalyzeTrack first.".to_string(),
+                    };
+                }
+            };
+
+            // Parse feature JSON
+            let parsed: serde_json::Value = match serde_json::from_str(&features_row.embedding) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Response::Error {
+                        id: Some(id),
+                        message: format!("Failed to parse features: {}", e),
+                    };
+                }
+            };
+
+            // Build audio features for rule-based tagging
+            let audio_features = llm::AudioFeatures {
+                bpm: track.bpm.unwrap_or(128.0),
+                key: track.key.clone().unwrap_or_else(|| "C".into()),
+                camelot_key: track.camelot_key.clone().unwrap_or_else(|| "8B".into()),
+                energy: track.energy.map(|e| e as f64 / 10.0).unwrap_or(0.5),
+                danceability: track.danceability.map(|d| d as f64 / 10.0).unwrap_or(0.5),
+                spectral_centroid: features_row.spectral_centroid.unwrap_or(2500.0),
+                spectral_rolloff: features_row.spectral_rolloff.unwrap_or(5000.0),
+                zero_crossing_rate: features_row.zero_crossing_rate.unwrap_or(0.05),
+                rms_energy: features_row.rms_energy.unwrap_or(0.3),
+                bass: parsed["bass"].as_f64().unwrap_or(0.5) as f32,
+                mids: parsed["mids"].as_f64().unwrap_or(0.5) as f32,
+                treble: parsed["treble"].as_f64().unwrap_or(0.5) as f32,
+                brightness: parsed["brightness"].as_f64().unwrap_or(0.5) as f32,
+                noisiness: parsed["noisiness"].as_f64().unwrap_or(0.3) as f32,
+            };
+
+            // Rule-based auto-tag (no model needed, instant)
+            let tagger = llm::AutoTagger::new();
+            let auto_tags = tagger.tag(&audio_features, track.title.as_deref(), track.artist.as_deref());
+
+            let updates = models::TrackUpdate {
+                title: None,
+                artist: None,
+                album: None,
+                bpm: None,
+                key: None,
+                camelot_key: None,
+                energy: Some(auto_tags.energy),
+                danceability: Some(auto_tags.danceability),
+                emotion: Some(auto_tags.mood.clone()),
+                genre: Some(auto_tags.genre.clone()),
+                sub_genre: Some(auto_tags.sub_genre.clone()),
+                tags: None,
+            };
+
+            if let Err(e) = db.update_track(track_id, &updates) {
+                return Response::Error {
+                    id: Some(id),
+                    message: format!("Failed to update track: {}", e),
+                };
+            }
+
+            info!("Auto-tag complete: genre={}, sub_genre={}, mood={}, confidence={:.0}%",
+                auto_tags.genre, auto_tags.sub_genre, auto_tags.mood, auto_tags.confidence * 100.0);
+
+            Response::AutoTagComplete {
+                id,
+                track_id,
+                tags: updates,
+            }
+        }
+
+        Command::ModelStatus { id } => {
+            Response::ModelStatus {
+                id,
+                ready: true,
+                model_name: "Rule-based AutoTagger (no download required)".to_string(),
+                downloaded: true,
             }
         }
     }

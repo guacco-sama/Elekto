@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Library, ScatterChart, GitGraph, Settings, Music, Search, Wand2 } from 'lucide-react'
+import { Library, ScatterChart, GitGraph, Settings, Music, Search, Wand2, Sparkles } from 'lucide-react'
 import { useTrackStore } from './stores/trackStore'
 import { useWorker } from './hooks/useWorker'
 import TrackList from './components/TrackList'
@@ -36,6 +36,27 @@ function App() {
         }
       } catch (err) {
         console.error(`Analysis failed for track ${track.id}:`, err)
+      }
+    }
+  }, [tracks, sendCommandAsync, updateTrack])
+
+  const handleAutoTagAll = useCallback(async () => {
+    const untagged = tracks.filter((t) => !t.genre && t.bpm)
+    for (const track of untagged.slice(0, 5)) {
+      try {
+        const response = await sendCommandAsync<{
+          type: string
+          track_id: number
+          tags: { genre: string; sub_genre: string; emotion: string; energy: number; danceability: number }
+        }>({
+          type: 'auto_tag_track',
+          track_id: track.id,
+        })
+        if (response.type === 'auto_tag_complete') {
+          updateTrack(track.id, response.tags)
+        }
+      } catch (err) {
+        console.error(`Auto-tag failed for track ${track.id}:`, err)
       }
     }
   }, [tracks, sendCommandAsync, updateTrack])
@@ -172,13 +193,22 @@ function App() {
                 </div>
                 <div className="flex items-center gap-4">
                   {tracks.length > 0 && (
-                    <button
-                      onClick={handleAnalyzeAll}
-                      className="flex items-center gap-2 px-3 py-2 bg-dj-accent hover:bg-dj-accent-hover text-white text-sm rounded-lg transition-colors"
-                    >
-                      <Wand2 className="w-4 h-4" />
-                      Analyze
-                    </button>
+                    <>
+                      <button
+                        onClick={handleAnalyzeAll}
+                        className="flex items-center gap-2 px-3 py-2 bg-dj-accent hover:bg-dj-accent-hover text-white text-sm rounded-lg transition-colors"
+                      >
+                        <Wand2 className="w-4 h-4" />
+                        Analyze
+                      </button>
+                      <button
+                        onClick={handleAutoTagAll}
+                        className="flex items-center gap-2 px-3 py-2 bg-dj-800 hover:bg-dj-700 border border-dj-700 text-dj-200 text-sm rounded-lg transition-colors"
+                      >
+                        <Sparkles className="w-4 h-4 text-yellow-400" />
+                        Auto-Tag
+                      </button>
+                    </>
                   )}
                   <div className="relative">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-dj-500" />

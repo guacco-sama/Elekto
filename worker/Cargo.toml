@@ -30,6 +30,12 @@ realfft = "3.4"
 # ONNX Runtime for ML inference
 # ort = "2.0"          # Enable when needed
 
+# LLM inference — currently rule-based (see src/llm.rs)
+# Future: candle-core + candle-transformers for local LLM
+# candle-core = "0.8"
+# candle-nn = "0.8"
+# candle-transformers = "0.8"
+
 # llama.cpp for LLM inference
 # llama-cpp-2 = "0.1"  # Enable when needed
 
