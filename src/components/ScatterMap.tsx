@@ -240,8 +240,18 @@ export default function ScatterMap() {
       window.removeEventListener('resize', onResize)
       renderer.domElement.removeEventListener('mousemove', onMouseMove)
       renderer.domElement.removeEventListener('click', onClick)
+      controls.dispose()
+      // Dispose all Three.js objects to prevent GPU memory leaks
+      points.forEach((mesh) => {
+        const mat = mesh.material as THREE.MeshStandardMaterial
+        mat.dispose()
+        scene.remove(mesh)
+      })
+      geometry.dispose()
       renderer.dispose()
-      container.removeChild(renderer.domElement)
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement)
+      }
     }
   }, [analyzedTracks, colorMode, setSelectedTrack])
 

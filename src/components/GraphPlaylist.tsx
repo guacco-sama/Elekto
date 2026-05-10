@@ -256,6 +256,7 @@ export default function GraphPlaylist() {
 
     return () => {
       sim.stop()
+      svg.call(zoom.on('zoom', null) as any)
       container.innerHTML = ''
     }
   }, [analyzedTracks, selectedNodes, pathNodes, edgesRef])

@@ -39,13 +39,7 @@ export default function TrackList() {
   const toggleTrackSelection = useTrackStore((s) => s.toggleTrackSelection)
   const selectTrackRange = useTrackStore((s) => s.selectTrackRange)
   const clearSelection = useTrackStore((s) => s.clearSelection)
-  const lastSelectedRef = (() => {
-    let last: number | null = null
-    return {
-      get: () => last,
-      set: (id: number | null) => { last = id }
-    }
-  })()
+  const lastSelectedRef = { current: null as number | null }
 
   const selectionCount = selectedTrackIds.size
 
@@ -53,14 +47,14 @@ export default function TrackList() {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault()
       toggleTrackSelection(trackId)
-      lastSelectedRef.set(trackId)
-    } else if (e.shiftKey && lastSelectedRef.get() !== null) {
+      lastSelectedRef.current = trackId
+    } else if (e.shiftKey && lastSelectedRef.current !== null) {
       e.preventDefault()
-      selectTrackRange(lastSelectedRef.get()!, trackId, tracks)
-      lastSelectedRef.set(trackId)
+      selectTrackRange(lastSelectedRef.current, trackId, tracks)
+      lastSelectedRef.current = trackId
     } else {
       setSelectedTrack(trackId)
-      lastSelectedRef.set(trackId)
+      lastSelectedRef.current = trackId
     }
   }
 
