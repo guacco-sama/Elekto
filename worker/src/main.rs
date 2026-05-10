@@ -459,11 +459,16 @@ async fn handle_command(cmd: Command, db: &db::Database) -> Response {
             let grid = waveform::detect_beat_grid(&samples, sample_rate, bpm);
             let grid_json = waveform::beatgrid_to_json(&grid);
 
+            // Detect cue points from energy envelope
+            let cues = waveform::detect_cue_points(&samples, sample_rate, &grid);
+            let cues_json = waveform::cues_to_json(&cues);
+
             Response::WaveformData {
                 id,
                 track_id,
                 waveform_json: wf_json,
                 beatgrid_json: grid_json,
+                cues_json,
             }
         }
     }

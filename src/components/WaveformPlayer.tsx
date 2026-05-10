@@ -15,6 +15,13 @@ interface BeatGrid {
   confidence: number
 }
 
+interface CuePoint {
+  time_sec: number
+  cue_type: string
+  confidence: number
+  energy: number
+}
+
 interface WaveformPlayerProps {
   trackId: number
   trackTitle: string
@@ -32,6 +39,7 @@ export default function WaveformPlayer({
   const containerRef = useRef<HTMLDivElement>(null)
   const [waveform, setWaveform] = useState<WaveformData | null>(null)
   const [beatGrid, setBeatGrid] = useState<BeatGrid | null>(null)
+  const [cues, setCues] = useState<CuePoint[]>([])
   const [loading, setLoading] = useState(true)
   const [playhead, setPlayhead] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -48,14 +56,16 @@ export default function WaveformPlayer({
           type: 'get_waveform',
           track_id: trackId,
           pixel_width: 1200,
-        }) as { type: string; track_id: number; waveform_json: string; beatgrid_json: string }
+        }) as { type: string; track_id: number; waveform_json: string; beatgrid_json: string; cues_json: string }
 
         if (response.type === 'waveform_data') {
           const wf: WaveformData = JSON.parse(response.waveform_json as string)
           const bg: BeatGrid = JSON.parse(response.beatgrid_json as string)
+          const cuePoints: CuePoint[] = JSON.parse((response.cues_json as string) || '[]')
           if (!cancelled) {
             setWaveform(wf)
             setBeatGrid(bg)
+            setCues(cuePoints)
             setLoading(false)
           }
         }
@@ -141,6 +151,34 @@ export default function WaveformPlayer({
       })
     }
 
+    // Draw cue markers
+    const cueColors: Record<string, string> = {
+      intro: '#33ff66',
+      drop: '#ff3333',
+      breakdown: '#ffaa00',
+      buildup: '#00ccff',
+      outro: '#8888ff',
+      energy_peak: '#ff6600',
+      energy_valley: '#9966ff',
+    }
+
+    cues.forEach((cue) => {
+      const x = (cue.time_sec / waveform.duration_sec) * w
+      const color = cueColors[cue.cue_type] || '#aaaaaa'
+      ctx.strokeStyle = color
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x, h)
+      ctx.stroke()
+
+      // Label
+      ctx.fillStyle = color
+      ctx.font = 'bold 10px Inter, sans-serif'
+      const label = cue.cue_type.replace('_', ' ').toUpperCase()
+      ctx.fillText(label, x + 3, 14)
+    })
+
     // Draw playhead
     const phX = playhead * w
     ctx.strokeStyle = '#e8e8f8'
@@ -155,7 +193,7 @@ export default function WaveformPlayer({
     ctx.font = '11px JetBrains Mono, monospace'
     const time = (playhead * waveform.duration_sec).toFixed(1)
     ctx.fillText(`${time}s`, phX + 6, 16)
-  }, [waveform, beatGrid, playhead])
+  }, [waveform, beatGrid, cues, playhead])
 
   useEffect(() => {
     draw()
@@ -252,6 +290,32 @@ export default function WaveformPlayer({
           <span>Downbeats: {beatGrid.downbeat_indices.length}</span>
           <span>Confidence: {Math.round(beatGrid.confidence * 100)}%</span>
           <span>Phase: {beatGrid.phase_offset}</span>
+        </div>
+      )}
+
+      {/* Cue points list */}
+      {cues.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-dj-500">Cues:</span>
+          {cues.map((cue, i) => {
+            const colors: Record<string, string> = {
+              intro: 'bg-green-400/20 text-green-400',
+              drop: 'bg-red-400/20 text-red-400',
+              breakdown: 'bg-orange-400/20 text-orange-400',
+              buildup: 'bg-cyan-400/20 text-cyan-400',
+              outro: 'bg-violet-400/20 text-violet-400',
+              energy_peak: 'bg-amber-400/20 text-amber-400',
+              energy_valley: 'bg-purple-400/20 text-purple-400',
+            }
+            return (
+              <span
+                key={i}
+                className={`text-xs px-2 py-0.5 rounded ${colors[cue.cue_type] || 'bg-dj-800 text-dj-400'}`}
+              >
+                {cue.cue_type.replace('_', ' ')} @ {Math.round(cue.time_sec)}s
+              </span>
+            )
+          })}
         </div>
       )}
     </div>

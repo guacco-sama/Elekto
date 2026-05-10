@@ -190,12 +190,13 @@ pub enum Response {
         downloaded: bool,
     },
 
-    /// Waveform + beat-grid data
+    /// Waveform + beat-grid + cue points data
     WaveformData {
         id: String,
         track_id: i64,
         waveform_json: String,
         beatgrid_json: String,
+        cues_json: String,
     },
 
     /// Error response

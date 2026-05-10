@@ -186,6 +186,190 @@ fn hann_window(i: usize, size: usize) -> f32 {
     0.5 * (1.0 - phase.cos())
 }
 
+/// Cue point type for DJ performance
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CueType {
+    Intro,
+    Drop,
+    Breakdown,
+    Buildup,
+    Outro,
+    EnergyPeak,
+    EnergyValley,
+}
+
+/// Auto-detected cue point
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CuePoint {
+    /// Time in seconds
+    pub time_sec: f64,
+    /// Cue type
+    pub cue_type: CueType,
+    /// Confidence 0.0-1.0
+    pub confidence: f64,
+    /// Energy level at this point (0.0-1.0)
+    pub energy: f64,
+}
+
+/// Detect cue points from energy envelope
+pub fn detect_cue_points(
+    samples: &[f32],
+    sample_rate: u32,
+    beat_grid: &BeatGrid,
+) -> Vec<CuePoint> {
+    let window_sec = 0.5f64; // 500ms windows
+    let window_samples = (window_sec * sample_rate as f64) as usize;
+    let hop_samples = window_samples / 2;
+
+    // Compute short-term RMS energy envelope
+    let mut energy_env: Vec<f64> = Vec::new();
+    let mut times: Vec<f64> = Vec::new();
+
+    for start in (0..samples.len().saturating_sub(window_samples)).step_by(hop_samples) {
+        let slice = &samples[start..start + window_samples];
+        let rms = (slice.iter().map(|&s| (s as f64).powi(2)).sum::<f64>() / slice.len() as f64).sqrt();
+        energy_env.push(rms);
+        times.push(start as f64 / sample_rate as f64);
+    }
+
+    if energy_env.is_empty() {
+        return Vec::new();
+    }
+
+    // Normalize energy
+    let max_energy = energy_env.iter().copied().fold(0.0_f64, f64::max).max(1e-10);
+    for v in &mut energy_env {
+        *v /= max_energy;
+    }
+
+    // Smooth with simple moving average
+    let smoothed = smooth(&energy_env, 5);
+
+    // Find peaks and valleys
+    let mut peaks: Vec<(usize, f64)> = Vec::new();
+    let mut valleys: Vec<(usize, f64)> = Vec::new();
+
+    for i in 2..smoothed.len().saturating_sub(2) {
+        let prev = smoothed[i - 1];
+        let curr = smoothed[i];
+        let next = smoothed[i + 1];
+
+        if curr > prev && curr > next && curr > 0.3 {
+            peaks.push((i, curr));
+        } else if curr < prev && curr < next && curr < 0.4 {
+            valleys.push((i, curr));
+        }
+    }
+
+    let mut cues: Vec<CuePoint> = Vec::new();
+    let duration = times.last().copied().unwrap_or(0.0);
+
+    // Intro: first significant energy rise after start
+    if !energy_env.is_empty() {
+        let intro_threshold = 0.15;
+        for (i, &e) in energy_env.iter().enumerate() {
+            if times[i] > 3.0 && e > intro_threshold {
+                let first_downbeat = beat_grid.beat_times.first().copied().unwrap_or(0.0);
+                let time = times[i].max(first_downbeat);
+                cues.push(CuePoint {
+                    time_sec: time,
+                    cue_type: CueType::Intro,
+                    confidence: (e / 0.5).min(1.0),
+                    energy: e,
+                });
+                break;
+            }
+        }
+    }
+
+    // Drop: first major energy peak after intro (first 1/3 of track)
+    let first_third = duration / 3.0;
+    for &(idx, e) in &peaks {
+        let t = times[idx];
+        if t > 5.0 && t < first_third {
+            cues.push(CuePoint {
+                time_sec: t,
+                cue_type: CueType::Drop,
+                confidence: e.min(1.0),
+                energy: e,
+            });
+            break;
+        }
+    }
+
+    // Breakdown: major valley after a drop (middle 1/3)
+    let second_third = duration * 2.0 / 3.0;
+    for &(idx, e) in &valleys {
+        let t = times[idx];
+        if t > first_third && t < second_third && e < 0.25 {
+            cues.push(CuePoint {
+                time_sec: t,
+                cue_type: CueType::Breakdown,
+                confidence: (1.0 - e).min(1.0),
+                energy: e,
+            });
+            break;
+        }
+    }
+
+    // Buildup: rise before a drop (if no drop found, find any major peak)
+    if let Some(drop) = cues.iter().find(|c| c.cue_type == CueType::Drop) {
+        let drop_time = drop.time_sec;
+        // Look for buildup ~4-16s before drop
+        for &(idx, e) in peaks.iter().rev() {
+            let t = times[idx];
+            let before_drop = drop_time - t;
+            if before_drop > 2.0 && before_drop < 20.0 {
+                cues.push(CuePoint {
+                    time_sec: t,
+                    cue_type: CueType::Buildup,
+                    confidence: e.min(1.0),
+                    energy: e,
+                });
+                break;
+            }
+        }
+    }
+
+    // Outro: energy drop in last 1/4
+    let last_quarter = duration * 0.75;
+    for &(idx, e) in valleys.iter().rev() {
+        let t = times[idx];
+        if t > last_quarter && e < 0.2 {
+            cues.push(CuePoint {
+                time_sec: t,
+                cue_type: CueType::Outro,
+                confidence: (1.0 - e).min(1.0),
+                energy: e,
+            });
+            break;
+        }
+    }
+
+    // Sort by time
+    cues.sort_by(|a, b| a.time_sec.partial_cmp(&b.time_sec).unwrap());
+
+    info!("Detected {} cue points", cues.len());
+    for cue in &cues {
+        info!("  {:?} @ {:.1}s (conf={:.2})", cue.cue_type, cue.time_sec, cue.confidence);
+    }
+
+    cues
+}
+
+fn smooth(data: &[f64], window: usize) -> Vec<f64> {
+    let half = window / 2;
+    (0..data.len())
+        .map(|i| {
+            let start = i.saturating_sub(half);
+            let end = (i + half + 1).min(data.len());
+            let slice = &data[start..end];
+            slice.iter().sum::<f64>() / slice.len() as f64
+        })
+        .collect()
+}
+
 /// Serialize waveform to compact JSON for IPC
 pub fn waveform_to_json(data: &WaveformData) -> String {
     serde_json::to_string(data).unwrap_or_else(|_| "{}".to_string())
@@ -194,4 +378,9 @@ pub fn waveform_to_json(data: &WaveformData) -> String {
 /// Serialize beat-grid to compact JSON for IPC
 pub fn beatgrid_to_json(grid: &BeatGrid) -> String {
     serde_json::to_string(grid).unwrap_or_else(|_| "{}".to_string())
+}
+
+/// Serialize cue points to JSON
+pub fn cues_to_json(cues: &[CuePoint]) -> String {
+    serde_json::to_string(cues).unwrap_or_else(|_| "[]".to_string())
 }
