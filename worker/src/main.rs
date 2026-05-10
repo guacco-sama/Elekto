@@ -6,6 +6,7 @@ mod export;
 mod ipc;
 mod llm;
 mod models;
+mod nl_search;
 mod scanner;
 mod sort;
 mod waveform;
@@ -115,6 +116,23 @@ async fn handle_command(cmd: Command, db: &db::Database) -> Response {
                 Err(e) => Response::Error {
                     id: Some(id),
                     message: format!("Search failed: {}", e),
+                },
+            }
+        }
+
+        Command::SearchNL { id, query } => {
+            match nl_search::search_nl(&db, &query) {
+                Ok(tracks) => {
+                    let total = tracks.len();
+                    Response::Tracks {
+                        id,
+                        tracks,
+                        total,
+                    }
+                }
+                Err(e) => Response::Error {
+                    id: Some(id),
+                    message: format!("NL search failed: {}", e),
                 },
             }
         }

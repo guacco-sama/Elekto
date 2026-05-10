@@ -27,6 +27,12 @@ pub enum Command {
         query: String,
     },
 
+    /// Natural language search tracks
+    SearchNL {
+        id: String,
+        query: String,
+    },
+
     /// Update track metadata
     UpdateTrack {
         id: String,

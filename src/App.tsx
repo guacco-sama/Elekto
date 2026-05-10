@@ -14,6 +14,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<'library' | 'scatter' | 'graph' | 'chapters' | 'settings'>('library')
   const [dropping, setDropping] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [nlMode, setNlMode] = useState(false)
 
   const { isReady, sendCommandAsync } = useWorker()
   const setTracks = useTrackStore((s) => s.setTracks)
@@ -118,19 +119,32 @@ function App() {
       return
     }
 
-    const response = await sendCommandAsync<{
-      type: string
-      tracks: Track[]
-      total: number
-    }>({
-      type: 'search_tracks',
-      query: searchQuery,
-    })
-
-    if (response.type === 'tracks') {
-      setTracks(response.tracks, response.total)
+    if (nlMode) {
+      const response = await sendCommandAsync<{
+        type: string
+        tracks: Track[]
+        total: number
+      }>({
+        type: 'search_nl',
+        query: searchQuery,
+      })
+      if (response.type === 'tracks') {
+        setTracks(response.tracks, response.total)
+      }
+    } else {
+      const response = await sendCommandAsync<{
+        type: string
+        tracks: Track[]
+        total: number
+      }>({
+        type: 'search_tracks',
+        query: searchQuery,
+      })
+      if (response.type === 'tracks') {
+        setTracks(response.tracks, response.total)
+      }
     }
-  }, [searchQuery, sendCommandAsync, setTracks])
+  }, [searchQuery, nlMode, sendCommandAsync, setTracks])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSearch()
@@ -225,12 +239,19 @@ function App() {
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-dj-500" />
                     <input
                       type="text"
-                      placeholder="Search tracks..."
+                      placeholder={nlMode ? '"dark techno 130bpm"' : 'Search tracks...'}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      className="bg-dj-900 border border-dj-700 rounded-lg pl-9 pr-4 py-2 text-sm text-dj-200 placeholder:text-dj-600 focus:outline-none focus:border-dj-accent w-64"
+                      className={`bg-dj-900 border rounded-lg pl-9 pr-20 py-2 text-sm text-dj-200 placeholder:text-dj-600 focus:outline-none focus:border-dj-accent w-80 transition-colors ${nlMode ? 'border-dj-accent/60' : 'border-dj-700'}`}
                     />
+                    <button
+                      onClick={() => setNlMode(!nlMode)}
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider transition-colors ${nlMode ? 'bg-dj-accent text-white' : 'bg-dj-800 text-dj-500 hover:text-dj-300'}`}
+                      title="Toggle Natural Language Search"
+                    >
+                      {nlMode ? 'NL' : 'TXT'}
+                    </button>
                   </div>
                   <div className="text-right">
                     <div className="text-3xl font-bold text-dj-accent font-mono">{tracks.length}</div>
