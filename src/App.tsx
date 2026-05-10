@@ -142,7 +142,7 @@ function App() {
       <div className="h-12 bg-dj-900 border-b border-dj-800 flex items-center px-4">
         <div className="flex items-center gap-2">
           <Music className="w-5 h-5 text-dj-accent" />
-          <span className="font-semibold text-dj-50 text-sm tracking-wide">DJ Curation</span>
+          <span className="font-semibold text-dj-50 text-sm tracking-wide">Elekto</span>
           <span className="text-xs text-dj-500 bg-dj-800 px-2 py-0.5 rounded-full font-mono">v0.1.0</span>
           {!isReady && (
             <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-full ml-2">
@@ -364,7 +364,7 @@ function SettingsView({ sendCommandAsync }: { sendCommandAsync: ReturnType<typeo
       }>({
         type: 'export_rekordbox',
         chapter_ids: [],
-        output_path: '/tmp/djcuration_export.xml',
+        output_path: '/tmp/elekto_export.xml',
       })
       if (response.type === 'export_complete') {
         setExportStatus(`Rekordbox XML exported to ${response.path}`)
@@ -386,7 +386,7 @@ function SettingsView({ sendCommandAsync }: { sendCommandAsync: ReturnType<typeo
       }>({
         type: 'export_engine_prime',
         chapter_ids: [],
-        output_path: '/tmp/djcuration_engine',
+        output_path: '/tmp/elekto_engine',
       })
       if (response.type === 'export_complete') {
         setExportStatus(`Engine Prime library exported to ${response.path}`)

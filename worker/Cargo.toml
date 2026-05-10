@@ -1,9 +1,9 @@
 [package]
-name = "djcuration-worker"
+name = "elekto-worker"
 version = "0.1.0"
 edition = "2024"
-authors = ["DJ Curation Team"]
-description = "Native worker for DJ Curation - audio analysis, ML inference, database"
+authors = ["Elekto Team"]
+description = "Native worker for Elekto - audio analysis, ML inference, database"
 license = "MIT"
 
 [dependencies]

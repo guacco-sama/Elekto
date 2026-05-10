@@ -1,9 +1,9 @@
 {
-  "name": "djcuration",
+  "name": "elekto",
   "version": "0.1.0",
-  "description": "AI-powered DJ music library curation tool",
+  "description": "Elekto — Desktop DJ music library curation with real-time analysis, chapter management, and export to Rekordbox & Engine Prime",
   "main": "dist-electron/main.js",
-  "author": "DJ Curation Team",
+  "author": "Elekto Team",
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -46,8 +46,8 @@
     "typescript-eslint": "^8.0.0"
   },
   "build": {
-    "appId": "io.djcuration.app",
-    "productName": "DJ Curation",
+    "appId": "io.elekto.app",
+    "productName": "Elekto",
     "directories": {
       "output": "release"
     },

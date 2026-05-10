@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::models::{Track, Chapter, TrackUpdate};
 
-/// Database layer for DJ Curation - wraps SQLite with typed operations
+/// Database layer for Elekto - wraps SQLite with typed operations
 pub struct Database {
     pub(crate) conn: Connection,
 }

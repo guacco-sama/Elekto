@@ -19,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter("info")
         .init();
 
-    info!("DJ Curation Worker v0.1.0 starting...");
+    info!("Elekto Worker v0.1.0 starting...");
 
     // Initialize database
     let db_path = dirs::data_dir()
