@@ -61,6 +61,19 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn write_progress(id: &str, processed: usize, total: usize, current_track_id: i64) -> std::io::Result<()> {
+    let mut stdout = std::io::stdout();
+    let resp = Response::AnalysisProgress {
+        id: id.to_string(),
+        track_id: current_track_id,
+        progress: (processed as f32 / total.max(1) as f32) * 100.0,
+        status: format!("{}/{} tracks analyzed", processed, total),
+    };
+    let json = serde_json::to_string(&resp)?;
+    writeln!(stdout, "{}", json)?;
+    stdout.flush()
+}
+
 async fn handle_command(cmd: Command, db: &db::Database) -> Response {
     match cmd {
         Command::Ping { id } => Response::Pong { id },
@@ -320,6 +333,74 @@ async fn handle_command(cmd: Command, db: &db::Database) -> Response {
                 id: Some(id),
                 message: "Model download not yet implemented".to_string(),
             }
+        }
+
+        Command::AnalyzeAll { id, track_ids, threads } => {
+            let thread_count = threads.unwrap_or(4).clamp(1, 16);
+            let total = track_ids.len();
+            if total == 0 {
+                return Response::Success { id };
+            }
+
+            let mut processed = 0usize;
+            for chunk in track_ids.chunks(thread_count) {
+                let mut handles = Vec::new();
+                for &track_id in chunk {
+                    let track = match db.get_track(track_id) {
+                        Ok(Some(t)) => t,
+                        _ => continue,
+                    };
+                    handles.push((track_id, track.file_path.clone()));
+                }
+
+                // Send progress before starting chunk
+                if !handles.is_empty() {
+                    let _ = write_progress(&id, processed, total, handles[0].0);
+                }
+
+                // Analyze chunk in parallel
+                use rayon::prelude::*;
+                let results: Vec<_> = handles.par_iter().map(|(tid, path)| {
+                    match audio::decode_audio(path) {
+                        Ok((samples, sample_rate)) => {
+                            match audio::analyze(&samples, sample_rate) {
+                                Ok(analysis) => Some((*tid, analysis, samples.len(), sample_rate)),
+                                Err(_) => None,
+                            }
+                        }
+                        Err(_) => None,
+                    }
+                }).collect();
+
+                // Update database with results
+                for result in results {
+                    if let Some((track_id, analysis, _sample_count, _sr)) = result {
+                        let updates = models::TrackUpdate {
+                            title: None, artist: None, album: None,
+                            bpm: Some(analysis.bpm),
+                            key: Some(analysis.key),
+                            camelot_key: Some(analysis.camelot_key),
+                            energy: Some(analysis.energy),
+                            danceability: Some(analysis.danceability),
+                            emotion: Some(analysis.emotion.clone()),
+                            genre: None, sub_genre: None, tags: None,
+                        };
+                        let _ = db.update_track(track_id, &updates);
+                        let features = models::TrackFeatures {
+                            track_id,
+                            embedding: serde_json::to_string(&analysis.features).unwrap_or_else(|_| "[]".to_string()),
+                            spectral_centroid: Some(analysis.spectral_centroid),
+                            spectral_rolloff: Some(analysis.spectral_rolloff),
+                            zero_crossing_rate: Some(analysis.zero_crossing_rate),
+                            rms_energy: Some(analysis.rms_energy),
+                        };
+                        let _ = db.insert_features(track_id, &features);
+                        processed += 1;
+                    }
+                }
+            }
+
+            Response::Success { id }
         }
 
         Command::AnalyzeTrack { id, track_id } => {

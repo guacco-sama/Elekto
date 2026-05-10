@@ -4,6 +4,7 @@ import { useTrackStore } from './stores/trackStore'
 import { useWorker } from './hooks/useWorker'
 import TrackList from './components/TrackList'
 import ScanProgress from './components/ScanProgress'
+import AnalysisProgressBar from './components/AnalysisProgress'
 import ScatterMap from './components/ScatterMap'
 import GraphPlaylist from './components/GraphPlaylist'
 import WaveformPlayer from './components/WaveformPlayer'
@@ -18,7 +19,7 @@ function App() {
   const [nlMode, setNlMode] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
 
-  const { isReady, sendCommandAsync } = useWorker()
+  const { isReady, sendCommandAsync, sendCommandWithProgress } = useWorker()
   const setTracks = useTrackStore((s) => s.setTracks)
   const addTracks = useTrackStore((s) => s.addTracks)
   const setScanning = useTrackStore((s) => s.setScanning)
@@ -26,27 +27,47 @@ function App() {
   const tracks = useTrackStore((s) => s.tracks)
   const selectedTrackId = useTrackStore((s) => s.selectedTrackId)
   const updateTrack = useTrackStore((s) => s.updateTrack)
+  const setAnalyzing = useTrackStore((s) => s.setAnalyzing)
+  const setAnalyzeProgress = useTrackStore((s) => s.setAnalyzeProgress)
 
   const handleAnalyzeAll = useCallback(async () => {
     const unanalyzed = tracks.filter((t) => !t.bpm)
-    for (const track of unanalyzed.slice(0, 5)) {
-      try {
-        const response = await sendCommandAsync<{
-          type: string
+    if (unanalyzed.length === 0) return
+
+    setAnalyzing(true)
+    try {
+      await sendCommandWithProgress<{
+        type: string
+      }>({
+        type: 'analyze_all',
+        track_ids: unanalyzed.map((t) => t.id),
+        threads: 4,
+      }, (progress) => {
+        const p = progress as unknown as {
           track_id: number
-          tags: { bpm: number; key: string; camelot_key: string; energy: number; danceability: number; emotion: string }
-        }>({
-          type: 'analyze_track',
-          track_id: track.id,
-        })
-        if (response.type === 'analysis_complete') {
-          updateTrack(track.id, response.tags)
+          progress: number
+          status: string
         }
-      } catch (err) {
-        console.error(`Analysis failed for track ${track.id}:`, err)
+        const match = p.status.match(/(\d+)\/(\d+)/)
+        if (match) {
+          setAnalyzeProgress(parseInt(match[1]), parseInt(match[2]), p.status)
+        }
+      })
+      // Refresh all tracks
+      const response = await sendCommandAsync<{
+        type: string
+        tracks: Track[]
+        total: number
+      }>({ type: 'get_tracks', limit: 100, offset: 0 })
+      if (response.type === 'tracks') {
+        setTracks(response.tracks, response.total)
       }
+    } catch (err) {
+      console.error('Batch analysis failed:', err)
+    } finally {
+      setAnalyzing(false)
     }
-  }, [tracks, sendCommandAsync, updateTrack])
+  }, [tracks, sendCommandWithProgress, sendCommandAsync, setTracks, setAnalyzing, setAnalyzeProgress])
 
   const handleAutoTagAll = useCallback(async () => {
     const untagged = tracks.filter((t) => !t.genre && t.bpm)
@@ -303,6 +324,8 @@ function App() {
               </div>
 
               <ScanProgress />
+
+              <AnalysisProgressBar />
 
               {/* Waveform preview for selected track */}
               {selectedTrackId && (() => {

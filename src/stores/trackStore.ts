@@ -23,7 +23,15 @@ export interface Track {
   created_at: string
 }
 
-interface TrackState {
+interface AnalysisState {
+  isAnalyzing: boolean
+  analyzeProgress: number
+  analyzeTotal: number
+  analyzeProcessed: number
+  analyzeStatus: string
+}
+
+interface TrackState extends AnalysisState {
   tracks: Track[]
   totalTracks: number
   isScanning: boolean
@@ -39,6 +47,8 @@ interface TrackState {
   setSearchQuery: (query: string) => void
   updateTrack: (id: number, updates: Partial<Track>) => void
   clearTracks: () => void
+  setAnalyzing: (analyzing: boolean) => void
+  setAnalyzeProgress: (processed: number, total: number, status?: string) => void
 }
 
 export const useTrackStore = create<TrackState>((set) => ({
@@ -49,6 +59,11 @@ export const useTrackStore = create<TrackState>((set) => ({
   scanPath: null,
   selectedTrackId: null,
   searchQuery: '',
+  isAnalyzing: false,
+  analyzeProgress: 0,
+  analyzeTotal: 0,
+  analyzeProcessed: 0,
+  analyzeStatus: '',
   setTracks: (tracks, total) => set({ tracks, totalTracks: total }),
   addTracks: (tracks) => set((state) => ({ 
     tracks: [...tracks, ...state.tracks],
@@ -66,4 +81,16 @@ export const useTrackStore = create<TrackState>((set) => ({
     tracks: state.tracks.map((t) => t.id === id ? { ...t, ...updates } : t),
   })),
   clearTracks: () => set({ tracks: [], totalTracks: 0, scanProgress: 0 }),
+  setAnalyzing: (analyzing) => set({ 
+    isAnalyzing: analyzing, 
+    analyzeProgress: analyzing ? 0 : 100,
+    analyzeProcessed: 0,
+    analyzeStatus: analyzing ? 'Starting analysis...' : '' 
+  }),
+  setAnalyzeProgress: (processed, total, status) => set({ 
+    analyzeProcessed: processed,
+    analyzeTotal: total,
+    analyzeProgress: total > 0 ? (processed / total) * 100 : 0,
+    analyzeStatus: status || `${processed}/${total} tracks analyzed`,
+  }),
 }))

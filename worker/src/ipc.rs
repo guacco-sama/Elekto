@@ -144,6 +144,13 @@ pub enum Command {
         track_id: i64,
     },
 
+    /// Analyze multiple tracks in parallel with progress
+    AnalyzeAll {
+        id: String,
+        track_ids: Vec<i64>,
+        threads: Option<usize>,
+    },
+
     /// Check if LLM model is downloaded and ready
     ModelStatus {
         id: String,
