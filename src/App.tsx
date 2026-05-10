@@ -1,17 +1,106 @@
-import { useState } from 'react'
-import { Library, ScatterChart, GitGraph, Settings, Music } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { Library, ScatterChart, GitGraph, Settings, Music, Search } from 'lucide-react'
+import { useTrackStore } from './stores/trackStore'
+import { useWorker } from './hooks/useWorker'
+import TrackList from './components/TrackList'
+import ScanProgress from './components/ScanProgress'
+import type { Track } from './stores/trackStore'
 
 function App() {
   const [activeTab, setActiveTab] = useState<'library' | 'scatter' | 'graph' | 'settings'>('library')
+  const [dropping, setDropping] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const { isReady, sendCommandAsync } = useWorker()
+  const setTracks = useTrackStore((s) => s.setTracks)
+  const addTracks = useTrackStore((s) => s.addTracks)
+  const setScanning = useTrackStore((s) => s.setScanning)
+  const setScanProgress = useTrackStore((s) => s.setScanProgress)
+  const tracks = useTrackStore((s) => s.tracks)
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    setDropping(false)
+
+    const files = e.dataTransfer.files
+    if (files.length === 0) return
+
+    const file = files[0] as unknown as { path?: string }
+    const path = file.path
+    if (!path) return
+
+    setScanning(true, path)
+    setScanProgress(10)
+
+    try {
+      const response = await sendCommandAsync<{
+        type: string
+        track_count: number
+        tracks: Track[]
+      }>({
+        type: 'scan_folder',
+        path,
+      })
+
+      if (response.type === 'scan_complete') {
+        addTracks(response.tracks)
+        setScanProgress(100)
+        setTimeout(() => setScanning(false), 500)
+      }
+    } catch (err) {
+      console.error('Scan failed:', err)
+      setScanning(false)
+    }
+  }, [sendCommandAsync, addTracks, setScanning, setScanProgress])
+
+  const handleSearch = useCallback(async () => {
+    if (!searchQuery.trim()) {
+      const response = await sendCommandAsync<{
+        type: string
+        tracks: Track[]
+        total: number
+      }>({
+        type: 'get_tracks',
+        limit: 100,
+        offset: 0,
+      })
+      if (response.type === 'tracks') {
+        setTracks(response.tracks, response.total)
+      }
+      return
+    }
+
+    const response = await sendCommandAsync<{
+      type: string
+      tracks: Track[]
+      total: number
+    }>({
+      type: 'search_tracks',
+      query: searchQuery,
+    })
+
+    if (response.type === 'tracks') {
+      setTracks(response.tracks, response.total)
+    }
+  }, [searchQuery, sendCommandAsync, setTracks])
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSearch()
+  }
 
   return (
     <div className="h-screen flex flex-col bg-dj-950">
       {/* Title Bar */}
-      <div className="h-12 bg-dj-900 border-b border-dj-800 flex items-center px-4 drag-region">
+      <div className="h-12 bg-dj-900 border-b border-dj-800 flex items-center px-4">
         <div className="flex items-center gap-2">
           <Music className="w-5 h-5 text-dj-accent" />
           <span className="font-semibold text-dj-50 text-sm tracking-wide">DJ Curation</span>
           <span className="text-xs text-dj-500 bg-dj-800 px-2 py-0.5 rounded-full font-mono">v0.1.0</span>
+          {!isReady && (
+            <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-full ml-2">
+              Worker connecting...
+            </span>
+          )}
         </div>
       </div>
 
@@ -48,7 +137,66 @@ function App() {
 
         {/* Content Area */}
         <main className="flex-1 overflow-auto p-6">
-          {activeTab === 'library' && <LibraryView />}
+          {activeTab === 'library' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold text-dj-50">Library</h1>
+                  <p className="text-sm text-dj-400 mt-1">
+                    {tracks.length === 0 
+                      ? 'Drop a folder to import your music collection' 
+                      : `${tracks.length} tracks ready for curation`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-dj-500" />
+                    <input
+                      type="text"
+                      placeholder="Search tracks..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      className="bg-dj-900 border border-dj-700 rounded-lg pl-9 pr-4 py-2 text-sm text-dj-200 placeholder:text-dj-600 focus:outline-none focus:border-dj-accent w-64"
+                    />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-3xl font-bold text-dj-accent font-mono">{tracks.length}</div>
+                    <div className="text-xs text-dj-500 uppercase tracking-wider">Tracks</div>
+                  </div>
+                </div>
+              </div>
+
+              <ScanProgress />
+
+              {tracks.length === 0 && (
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    setDropping(true)
+                  }}
+                  onDragLeave={() => setDropping(false)}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-xl h-64 flex flex-col items-center justify-center gap-4 transition-all duration-300 cursor-pointer ${
+                    dropping
+                      ? 'border-dj-accent bg-dj-accent/5 scale-[1.02]'
+                      : 'border-dj-700 bg-dj-900/50 hover:border-dj-600 hover:bg-dj-800/50'
+                  }`}
+                >
+                  <div className="w-16 h-16 rounded-2xl bg-dj-800 flex items-center justify-center">
+                    <Music className="w-8 h-8 text-dj-400" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-dj-200 font-medium">Drop your music folder here</p>
+                    <p className="text-dj-500 text-sm mt-1">Supports MP3, FLAC, WAV, AIFF, M4A</p>
+                  </div>
+                </div>
+              )}
+
+              <TrackList />
+            </div>
+          )}
+
           {activeTab === 'scatter' && <ScatterMapView />}
           {activeTab === 'graph' && <GraphPlaylistView />}
           {activeTab === 'settings' && <SettingsView />}
@@ -81,70 +229,6 @@ function NavButton({
     >
       {icon}
     </button>
-  )
-}
-
-function LibraryView() {
-  const [dropping, setDropping] = useState(false)
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-dj-50">Library</h1>
-          <p className="text-sm text-dj-400 mt-1">Drop a folder to import your music collection</p>
-        </div>
-        <div className="text-right">
-          <div className="text-3xl font-bold text-dj-accent font-mono">0</div>
-          <div className="text-xs text-dj-500 uppercase tracking-wider">Tracks</div>
-        </div>
-      </div>
-
-      {/* Drop Zone */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault()
-          setDropping(true)
-        }}
-        onDragLeave={() => setDropping(false)}
-        onDrop={(e) => {
-          e.preventDefault()
-          setDropping(false)
-          // TODO: Handle file drop
-        }}
-        className={`border-2 border-dashed rounded-xl h-64 flex flex-col items-center justify-center gap-4 transition-all duration-300 cursor-pointer ${
-          dropping
-            ? 'border-dj-accent bg-dj-accent/5 scale-[1.02]'
-            : 'border-dj-700 bg-dj-900/50 hover:border-dj-600 hover:bg-dj-800/50'
-        }`}
-      >
-        <div className="w-16 h-16 rounded-2xl bg-dj-800 flex items-center justify-center">
-          <Music className="w-8 h-8 text-dj-400" />
-        </div>
-        <div className="text-center">
-          <p className="text-dj-200 font-medium">Drop your music folder here</p>
-          <p className="text-dj-500 text-sm mt-1">Supports MP3, FLAC, WAV, AIFF, M4A</p>
-        </div>
-      </div>
-
-      {/* Track List Placeholder */}
-      <div className="bg-dj-900 rounded-xl border border-dj-800 overflow-hidden">
-        <div className="px-4 py-3 border-b border-dj-800 flex items-center gap-4 text-xs text-dj-400 uppercase tracking-wider font-medium">
-          <span className="w-8">#</span>
-          <span className="flex-1">Title</span>
-          <span className="w-32">Artist</span>
-          <span className="w-24">Genre</span>
-          <span className="w-16">BPM</span>
-          <span className="w-16">Key</span>
-          <span className="w-16">Energy</span>
-          <span className="w-16 text-right">Duration</span>
-        </div>
-        <div className="px-4 py-12 text-center text-dj-500">
-          <p>No tracks imported yet</p>
-          <p className="text-sm mt-1">Drop a folder above to get started</p>
-        </div>
-      </div>
-    </div>
   )
 }
 
