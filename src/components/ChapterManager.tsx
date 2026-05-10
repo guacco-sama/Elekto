@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useChapterStore } from '../stores/chapterStore'
 import { useTrackStore } from '../stores/trackStore'
-import { FolderPlus, Trash2, GripVertical, Music, ArrowRight, Sparkles } from 'lucide-react'
+import { FolderPlus, Trash2, GripVertical, Music, ArrowRight, Sparkles, Wand2 } from 'lucide-react'
 import EnergyCurve from './EnergyCurve'
 
 interface ChapterManagerProps {
@@ -129,6 +129,68 @@ export default function ChapterManager({ sendCommandAsync }: ChapterManagerProps
     }
   }, [sortStrategy, sorting, sendCommandAsync, setChapterTracks])
 
+  const handleAutoChapters = useCallback(async () => {
+    // Group analyzed tracks by genre
+    const analyzed = tracks.filter((t) => t.genre && t.bpm)
+    const byGenre = new Map<string, typeof analyzed>()
+    for (const t of analyzed) {
+      const g = t.genre!
+      if (!byGenre.has(g)) byGenre.set(g, [])
+      byGenre.get(g)!.push(t)
+    }
+
+    for (const [genre, genreTracks] of byGenre) {
+      if (genreTracks.length < 3) continue
+
+      // Create chapter
+      const name = `${genre} Mix`
+      const energy = Math.round(genreTracks.reduce((s, t) => s + (t.energy || 5), 0) / genreTracks.length)
+      try {
+        const res = await sendCommandAsync({
+          type: 'create_chapter',
+          name,
+          description: `Auto-generated ${genre} chapter with ${genreTracks.length} tracks · Avg energy ${energy}/10`,
+          energy_target: energy,
+        }) as { type: string; chapter_id: number }
+
+        if (res.type === 'chapter_created') {
+          const chapterId = res.chapter_id
+          addChapter({
+            id: chapterId,
+            name,
+            description: `Auto-generated ${genre} chapter`,
+            energy_target: energy,
+            sort_order: chapters.length,
+            created_at: new Date().toISOString(),
+          })
+
+          // Add all tracks
+          for (let i = 0; i < genreTracks.length; i++) {
+            await sendCommandAsync({
+              type: 'add_track_to_chapter',
+              chapter_id: chapterId,
+              track_id: genreTracks[i].id,
+              position: i,
+            })
+            addTrackToChapter(chapterId, genreTracks[i].id)
+          }
+
+          // Auto-sort by energy flow
+          const sortRes = await sendCommandAsync({
+            type: 'sort_chapter',
+            chapter_id: chapterId,
+            strategy: 'energy_flow',
+          }) as { type: string; track_ids: number[] }
+          if (sortRes.type === 'chapter_sorted') {
+            setChapterTracks(chapterId, sortRes.track_ids)
+          }
+        }
+      } catch (e) {
+        console.error('Auto-chapter failed for', genre, e)
+      }
+    }
+  }, [tracks, chapters.length, addChapter, addTrackToChapter, setChapterTracks, sendCommandAsync])
+
   const handleDragStart = (trackId: number) => {
     setDraggedTrack(trackId)
   }
@@ -163,13 +225,24 @@ export default function ChapterManager({ sendCommandAsync }: ChapterManagerProps
         <div className="p-4 border-b border-dj-800">
           <h3 className="text-sm font-semibold text-dj-200 mb-3">Chapters</h3>
           {!isCreating ? (
-            <button
-              onClick={() => setIsCreating(true)}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-dj-800 hover:bg-dj-700 text-dj-300 text-sm rounded-lg transition-colors"
-            >
-              <FolderPlus className="w-4 h-4" />
-              New Chapter
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={() => setIsCreating(true)}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-dj-800 hover:bg-dj-700 text-dj-300 text-sm rounded-lg transition-colors"
+              >
+                <FolderPlus className="w-4 h-4" />
+                New Chapter
+              </button>
+              {tracks.filter(t => t.genre).length >= 3 && (
+                <button
+                  onClick={handleAutoChapters}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-dj-950 border border-dj-700 hover:border-dj-accent/50 hover:bg-dj-800/50 text-dj-400 hover:text-dj-200 text-sm rounded-lg transition-colors"
+                >
+                  <Wand2 className="w-4 h-4" />
+                  Smart Chapters
+                </button>
+              )}
+            </div>
           ) : (
             <div className="space-y-2">
               <input
