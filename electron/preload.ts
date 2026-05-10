@@ -9,6 +9,10 @@ export interface AudioAPI {
   readAudioFile: (filePath: string) => Promise<ArrayBuffer>
 }
 
+export interface DialogAPI {
+  selectFolder: () => Promise<{ canceled: boolean; filePaths: string[] }>
+}
+
 const workerAPI: WorkerAPI = {
   sendCommand: (command: unknown) => {
     ipcRenderer.send('worker-command', command)
@@ -25,9 +29,12 @@ const audioAPI: AudioAPI = {
     ipcRenderer.invoke('read-audio-file', filePath),
 }
 
+const dialogAPI: DialogAPI = {
+  selectFolder: () => ipcRenderer.invoke('select-folder'),
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   worker: workerAPI,
   audio: audioAPI,
+  dialog: dialogAPI,
 })
-
-

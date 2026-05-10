@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Library, ScatterChart, GitGraph, Settings, Music, Search, Wand2, Sparkles, Layers } from 'lucide-react'
 import { useTrackStore } from './stores/trackStore'
 import { useWorker } from './hooks/useWorker'
@@ -8,6 +8,7 @@ import ScatterMap from './components/ScatterMap'
 import GraphPlaylist from './components/GraphPlaylist'
 import WaveformPlayer from './components/WaveformPlayer'
 import ChapterManager from './components/ChapterManager'
+import Onboarding from './components/Onboarding'
 import type { Track } from './stores/trackStore'
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
   const [dropping, setDropping] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [nlMode, setNlMode] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   const { isReady, sendCommandAsync } = useWorker()
   const setTracks = useTrackStore((s) => s.setTracks)
@@ -67,20 +69,9 @@ function App() {
     }
   }, [tracks, sendCommandAsync, updateTrack])
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault()
-    setDropping(false)
-
-    const files = e.dataTransfer.files
-    if (files.length === 0) return
-
-    const file = files[0] as unknown as { path?: string }
-    const path = file.path
-    if (!path) return
-
+  const runScan = useCallback(async (path: string) => {
     setScanning(true, path)
     setScanProgress(10)
-
     try {
       const response = await sendCommandAsync<{
         type: string
@@ -90,7 +81,6 @@ function App() {
         type: 'scan_folder',
         path,
       })
-
       if (response.type === 'scan_complete') {
         addTracks(response.tracks)
         setScanProgress(100)
@@ -101,6 +91,17 @@ function App() {
       setScanning(false)
     }
   }, [sendCommandAsync, addTracks, setScanning, setScanProgress])
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    setDropping(false)
+    const files = e.dataTransfer.files
+    if (files.length === 0) return
+    const file = files[0] as unknown as { path?: string }
+    const path = file.path
+    if (!path) return
+    await runScan(path)
+  }, [runScan])
 
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) {
@@ -150,7 +151,48 @@ function App() {
     if (e.key === 'Enter') handleSearch()
   }
 
+  // Check onboarding status when worker is ready
+  useEffect(() => {
+    if (!isReady) return
+    sendCommandAsync<{
+      type: string
+      key: string
+      value: string | null
+    }>({ type: 'get_setting', key: 'onboarding_completed' }).then((res) => {
+      if (res.type === 'config_value' && res.value !== 'true') {
+        setShowOnboarding(true)
+      }
+    }).catch(() => {
+      setShowOnboarding(true)
+    })
+  }, [isReady, sendCommandAsync])
+
+  const handleOnboardingComplete = useCallback(async () => {
+    setShowOnboarding(false)
+    // Refresh tracks
+    const response = await sendCommandAsync<{
+      type: string
+      tracks: Track[]
+      total: number
+    }>({ type: 'get_tracks', limit: 100, offset: 0 })
+    if (response.type === 'tracks') {
+      setTracks(response.tracks, response.total)
+    }
+  }, [sendCommandAsync, setTracks])
+
+  const handleOnboardingScan = useCallback((path: string) => {
+    runScan(path)
+  }, [runScan])
+
   return (
+    <>
+      {showOnboarding && (
+        <Onboarding
+          onComplete={handleOnboardingComplete}
+          onScan={handleOnboardingScan}
+          sendCommandAsync={sendCommandAsync}
+        />
+      )}
     <div className="h-screen flex flex-col bg-dj-950">
       {/* Title Bar */}
       <div className="h-12 bg-dj-900 border-b border-dj-800 flex items-center px-4">
@@ -318,6 +360,7 @@ function App() {
         </main>
       </div>
     </div>
+      </>
   )
 }
 
@@ -504,6 +547,31 @@ function SettingsView({ sendCommandAsync }: { sendCommandAsync: ReturnType<typeo
                 <p className="text-xs text-dj-500">Rule-based classification (no download required)</p>
               </div>
               <span className="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded">Ready</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-dj-900 rounded-xl border border-dj-800 p-4">
+          <h3 className="font-medium text-dj-200 mb-3">Getting Started</h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-dj-200">Onboarding</p>
+                <p className="text-xs text-dj-500">Show the welcome wizard again</p>
+              </div>
+              <button
+                onClick={async () => {
+                  await sendCommandAsync({
+                    type: 'set_setting',
+                    key: 'onboarding_completed',
+                    value: 'false',
+                  })
+                  window.location.reload()
+                }}
+                className="px-3 py-1.5 bg-dj-800 hover:bg-dj-700 text-dj-300 text-sm rounded-lg transition-colors"
+              >
+                Reset
+              </button>
             </div>
           </div>
         </div>

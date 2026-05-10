@@ -112,6 +112,12 @@ pub enum Command {
         id: String,
     },
 
+    /// Get a single setting value
+    GetSetting {
+        id: String,
+        key: String,
+    },
+
     /// Set a setting
     SetSetting {
         id: String,
@@ -197,6 +203,13 @@ pub enum Response {
     Settings {
         id: String,
         settings: Vec<(String, String)>,
+    },
+
+    /// Single config value response
+    ConfigValue {
+        id: String,
+        key: String,
+        value: Option<String>,
     },
 
     /// Analysis progress/complete

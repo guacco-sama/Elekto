@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
@@ -82,6 +82,16 @@ ipcMain.on('worker-command', (_, command: unknown) => {
   if (workerProcess?.stdin?.writable) {
     workerProcess.stdin.write(JSON.stringify(command) + '\n')
   }
+})
+
+ipcMain.handle('select-folder', async () => {
+  if (!mainWindow) return { canceled: true, filePaths: [] }
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Select Music Folder',
+    buttonLabel: 'Select Folder',
+  })
+  return result
 })
 
 ipcMain.handle('read-audio-file', async (_, filePath: string) => {

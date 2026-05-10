@@ -294,6 +294,16 @@ async fn handle_command(cmd: Command, db: &db::Database) -> Response {
             }
         }
 
+        Command::GetSetting { id, key } => {
+            match db.get_setting(&key) {
+                Ok(value) => Response::ConfigValue { id, key, value },
+                Err(e) => Response::Error {
+                    id: Some(id),
+                    message: format!("Failed to get setting: {}", e),
+                },
+            }
+        }
+
         Command::SetSetting { id, key, value } => {
             match db.set_setting(&key, &value) {
                 Ok(_) => Response::Success { id },
